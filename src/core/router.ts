@@ -6,10 +6,9 @@ import pathToPattern from "@/utils/pathUtils";
 let routes: Route[] = [];
 
 function clearModuleCache(modulePath: string) {
-    const resolvedPath = require.resolve(modulePath);
-    delete require.cache[resolvedPath];
-  }
-
+  const resolvedPath = require.resolve(modulePath);
+  delete require.cache[resolvedPath];
+}
 
 async function loadRoutes(routesDir: string) {
   routes = [];
@@ -36,22 +35,22 @@ async function loadRoutes(routesDir: string) {
         const absolutePath = path.resolve(fullPath);
         clearModuleCache(absolutePath);
         const module = await import(`${absolutePath}?update=${Date.now()}`);
-        
+
         const handlers: RouteHandlers = {};
 
-        ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].forEach(method => {
-          if (typeof module[method] === 'function') {
+        ["GET", "POST", "PUT", "DELETE", "PATCH"].forEach((method) => {
+          if (typeof module[method] === "function") {
             handlers[method as keyof RouteHandlers] = module[method];
           }
         });
 
-        if (typeof module.default === 'function' && !handlers.GET) {
+        if (typeof module.default === "function" && !handlers.GET) {
           handlers.GET = module.default;
         }
 
         if (Object.keys(handlers).length > 0) {
           const route = { pattern, params, handlers };
-          
+
           if (params.length > 0) {
             dynamicRoutes.push(route);
           } else {
@@ -59,17 +58,20 @@ async function loadRoutes(routesDir: string) {
           }
         }
       } catch (error) {
-        console.error(`Erreur lors du chargement de la route ${routePath}:`, error);
+        console.error(
+          `Erreur lors du chargement de la route ${routePath}:`,
+          error
+        );
       }
     }
   }
 
   await scanDir(routesDir);
-  
+
   routes = [...staticRoutes, ...dynamicRoutes];
 }
 
-function findRoute(url: string, method: string = 'GET') {
+function findRoute(url: string, method: string = "GET") {
   const path = url.split("?")[0] || "/";
 
   for (const route of routes) {
@@ -79,12 +81,12 @@ function findRoute(url: string, method: string = 'GET') {
       route.params.forEach((param, i) => {
         params[param] = match[i + 1];
       });
-      
+
       const handler = route.handlers[method as keyof RouteHandlers];
       if (!handler) {
-        return { error: 'Method Not Allowed', status: 405 };
+        return { error: "Method Not Allowed", status: 405 };
       }
-      
+
       return { handler, params };
     }
   }
@@ -92,10 +94,10 @@ function findRoute(url: string, method: string = 'GET') {
 }
 
 function getRoutesDir(customDir?: string) {
-    const projectRoot = process.cwd();
-    const routesDir = customDir || process.env.ROUTES_DIR || 'routes';
-    console.log(path.resolve(projectRoot, routesDir));
-    return path.resolve(projectRoot, routesDir);
+  const projectRoot = process.cwd();
+  const routesDir = customDir || process.env.ROUTES_DIR || "routes";
+  console.log(path.resolve(projectRoot, routesDir));
+  return path.resolve(projectRoot, routesDir);
 }
 
 export { loadRoutes, findRoute, getRoutesDir };

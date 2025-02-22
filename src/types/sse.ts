@@ -24,6 +24,4 @@ interface SSEClient {
 
 // All sse type event available
 
-
-
 export type { SSEOptions, SSEClientOptions, SSEEventHandlers, SSEClient };

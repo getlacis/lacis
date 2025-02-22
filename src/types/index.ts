@@ -6,8 +6,14 @@ type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 type GetHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 type PostHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 type PutHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-type DeleteHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-type PatchHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+type DeleteHandler = (
+  req: IncomingMessage,
+  res: ServerResponse
+) => Promise<void>;
+type PatchHandler = (
+  req: IncomingMessage,
+  res: ServerResponse
+) => Promise<void>;
 
 type RouteHandlers = {
   GET?: Handler;
