@@ -84,15 +84,12 @@ export default async function handler(req: Request, res: Response) {
 Pour démarrer un serveur avec Zeno, vous pouvez utiliser la fonction `createServer` fournie par le framework.
 
 ```typescript
-import { createServer } from 'zeno';
-import path from 'path';
+import { createServer } from "@core/server";
+import { getRoutesDir } from "@core/router";
 
-const server = createServer({
-  routesDir: path.join(__dirname, 'routes'),  // Dossier où sont définies vos routes
-  port: 3000  // Port sur lequel le serveur écoute
-});
+const routesDir = getRoutesDir();
+createServer(routesDir);
 
-server.listen();
 ```
 
 ## Routes
