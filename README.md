@@ -18,6 +18,8 @@
 
 - **Structure simple** : Organisez facilement vos routes en fonction des fichiers et dossiers, ce qui rend le code plus lisible et mieux structuré.
 
+- **Hot reloading** : Actualiser automatiquement l'application lors des modifications du code, offrant ainsi une expérience de développement fluide et instantanée sans avoir à redémarrer manuellement le serveur.
+
 ## Installation
 
 ### Prérequis
