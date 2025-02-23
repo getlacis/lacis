@@ -1,7 +1,5 @@
-interface ServerConfig {
-  port: number;
-  isDev: boolean;
-}
+import type { ServerConfig } from "@/types";
+
 
 const defaultConfig: ServerConfig = {
   port: 3000,
