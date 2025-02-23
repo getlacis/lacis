@@ -6,7 +6,7 @@ export async function GET(req: Request, res: Response) {
   res.initSSE();
   
   console.log("Sending regular updates");
-  res.send({ status: "connected" });
+  res.sseSend({ status: "connected" });
   
   res.sseEvent("userUpdate", { id: 1, name: "John" });
   res.sseClose();
