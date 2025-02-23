@@ -1,6 +1,7 @@
 import type { Adapter, RouteHandlers } from "@/types";
 import type { Route, Handler } from "@/types";
 import type { VercelRequest, VercelResponse } from "@/types";
+import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
 import { findRoute } from "@core/router";
 import { IncomingMessage, ServerResponse } from "http";
 
@@ -23,7 +24,7 @@ export const vercelAdapter: Adapter = {
       if (!handler) {
         return res.status(404).json({ error: "Method not allowed" });
       }
-
+      
       try {
         await handler(req as IncomingMessage, res as unknown as ServerResponse);
       } catch (error) {

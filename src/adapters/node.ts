@@ -3,6 +3,7 @@ import https from "https";
 import type { Adapter, ServerConfig } from "@/types";
 import { loadRoutes, findRoute } from "@/core/router";
 import { watchRoutes } from "@/core/watcher";
+import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
 
 export const nodeAdapter: Adapter = {
   name: "node",
@@ -13,7 +14,6 @@ export const nodeAdapter: Adapter = {
       
         if (isDev) {
           watchRoutes(routesDir);
-          console.log("🔥 Mode dev activé");
         }
       
         const requestListener: http.RequestListener = async (req, res) => {
@@ -62,4 +62,6 @@ export const nodeAdapter: Adapter = {
         return server;
     };
   },
+  transformRequest: (req) => enhanceRequest(req),
+  transformResponse: (res) => enhanceResponse(res),
 };

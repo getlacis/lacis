@@ -44,3 +44,5 @@ export type { Handler, RouteHandlers, Route, ServerConfig };
 export * from "./sse";
 export * from "./adapter";
 export * from "./platform";
+export * from "./enhancer";
+export * from "./platform";
