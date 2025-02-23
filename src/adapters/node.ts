@@ -8,6 +8,10 @@ import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
 export const nodeAdapter: Adapter = {
   name: "node",
   createHandler: (routesDir: string) => {
+
+    const transformRequest = nodeAdapter.transformRequest!;
+    const transformResponse = nodeAdapter.transformResponse!;
+
     return async (config: ServerConfig = {}) => {
         const { isDev, port } = config;
         await loadRoutes(routesDir);
@@ -19,6 +23,9 @@ export const nodeAdapter: Adapter = {
         const requestListener: http.RequestListener = async (req, res) => {
           try {
             const route = findRoute(req.url || "/", req.method || "GET");
+
+            const enhancedReq = transformRequest(req);
+            const enhancedRes = transformResponse(res);
       
             if (!route) {
               res.writeHead(404, { "Content-Type": "application/json" });
@@ -34,7 +41,7 @@ export const nodeAdapter: Adapter = {
             }
       
             (req as any).params = route.params;
-            await route.handler(req, res);
+            await route.handler(enhancedReq, enhancedRes);
           } catch (error) {
             console.error("Server error:", error);
             res.writeHead(500, { "Content-Type": "application/json" });
