@@ -4,6 +4,7 @@ import type { Adapter, ServerConfig } from "@/types";
 import { loadRoutes, findRoute } from "@/core/router";
 import { watchRoutes } from "@/core/watcher";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
+import { runMiddlewares } from "@/core/middleware";
 
 export const nodeAdapter: Adapter = {
   name: "node",
@@ -13,7 +14,7 @@ export const nodeAdapter: Adapter = {
     const transformResponse = nodeAdapter.transformResponse!;
 
     return async (config: ServerConfig = {}) => {
-        const { isDev, port } = config;
+        const { isDev, port, defaultHeaders } = config;
         await loadRoutes(routesDir);
       
         if (isDev) {
@@ -21,11 +22,22 @@ export const nodeAdapter: Adapter = {
         }
       
         const requestListener: http.RequestListener = async (req, res) => {
-          try {
-            const route = findRoute(req.url || "/", req.method || "GET");
+          const enhancedReq = transformRequest(req);
+          const enhancedRes = transformResponse(res);
 
-            const enhancedReq = transformRequest(req);
-            const enhancedRes = transformResponse(res);
+          try {
+
+            if(defaultHeaders) {
+              Object.entries(defaultHeaders).forEach(([key, value]) => {
+                res.setHeader(key, value);
+              });
+            }
+
+            const shouldContinue = await runMiddlewares('beforeRequest', enhancedReq, enhancedRes);
+
+            if (!shouldContinue) return;
+
+            const route = findRoute(enhancedReq.url || "/", enhancedReq.method || "GET");
       
             if (!route) {
               res.writeHead(404, { "Content-Type": "application/json" });
@@ -40,12 +52,19 @@ export const nodeAdapter: Adapter = {
               return;
             }
       
-            (req as any).params = route.params;
+            (enhancedReq as any).params = route.params;
             await route.handler(enhancedReq, enhancedRes);
+
+            await runMiddlewares('afterRequest', enhancedReq, enhancedRes);
           } catch (error) {
             console.error("Server error:", error);
-            res.writeHead(500, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Internal server error" }));
+
+            await runMiddlewares('onError', enhancedReq, enhancedRes, error);
+            
+            if(!res.headersSent) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "Internal server error" }));
+            }
           }
         };
       

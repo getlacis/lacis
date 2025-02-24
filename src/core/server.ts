@@ -10,11 +10,9 @@ async function createServer(
 ) {
   const { platform = 'node' } = config;
   
-  await loadRoutes(routesDir);
-  
   if (config.isDev) {
     watchRoutes(routesDir);
-    console.log("🔥 Mode dev activé");
+    console.log("🔥 Dev mode activated");
   }
 
   const adapter = getAdapter(platform);

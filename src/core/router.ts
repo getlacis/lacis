@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import type { Route, RouteHandlers } from "@/types/index";
 import pathToPattern from "@/utils/pathUtils";
-
+import { loadMiddlewares } from "./middleware";
 let routes: Route[] = [];
 
 function clearModuleCache(modulePath: string) {
@@ -15,6 +15,8 @@ async function loadRoutes(routesDir: string) {
   const staticRoutes: Route[] = [];
   const dynamicRoutes: Route[] = [];
 
+  await loadMiddlewares(routesDir);
+
   async function scanDir(dir: string, prefix = "") {
     const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -26,9 +28,10 @@ async function loadRoutes(routesDir: string) {
         continue;
       }
 
-      if (!entry.name.endsWith(".ts")) continue;
+      if(entry.name.endsWith("+middleware.ts") || entry.name.endsWith("+middleware.js"))
+      if(!entry.name.endsWith(".ts") && !entry.name.endsWith(".js")) continue;
 
-      const routePath = `${prefix}/${entry.name.replace(".ts", "")}`;
+      const routePath = `${prefix}/${entry.name.replace(/\.(ts|js)$/, "")}`;
       const { pattern, params } = pathToPattern(routePath);
 
       try {

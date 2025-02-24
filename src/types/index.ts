@@ -37,7 +37,8 @@ interface ServerConfig {
     cert?: string | Buffer;
     key?: string | Buffer;
     ca?: string | Buffer | Array<string | Buffer>;
-  };
+  },
+  defaultHeaders?: Record<string, string>;
 }
 
 export type { Handler, RouteHandlers, Route, ServerConfig };
@@ -46,3 +47,4 @@ export * from "./adapter";
 export * from "./platform";
 export * from "./enhancer";
 export * from "./platform";
+export * from "./middleware";
