@@ -101,10 +101,6 @@ async function runMiddlewares(
   );
   const urlPath = url.pathname;
 
-  const sortedPaths = Array.from(pathMiddlewares.keys()).sort((a, b) => {
-    return b.length - a.length;
-  });
-
   for (const Middleware of globalMiddlewares[MiddlewareName]) {
     try {
       const result = await Middleware(req, res, context);
@@ -123,6 +119,10 @@ async function runMiddlewares(
       return false;
     }
   }
+
+  const sortedPaths = Array.from(pathMiddlewares.keys()).sort((a, b) => {
+    return b.length - a.length;
+  });
 
   for (const MiddlewarePath of sortedPaths) {
     if (isPathApplicable(MiddlewarePath, urlPath)) {
@@ -146,6 +146,8 @@ async function runMiddlewares(
           return false;
         }
       }
+
+      return true;
     }
   }
 
