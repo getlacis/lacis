@@ -69,7 +69,8 @@ export const nodeAdapter: Adapter = {
             console.error("Server error:", error);
 
             if(globalMiddlewares?.onError) {
-              await globalMiddlewares.onError(enhancedReq, enhancedRes, error);
+              const result = await globalMiddlewares.onError(enhancedReq, enhancedRes, error);
+              if(!result) return;
             }
 
             await runMiddlewares('onError', enhancedReq, enhancedRes, error);
