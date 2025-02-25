@@ -1,4 +1,4 @@
-import http from "http";
+import http, { globalAgent } from "http";
 import https from "https";
 import type { Adapter, ServerConfig } from "@/types";
 import { loadRoutes, findRoute } from "@/core/router";
@@ -14,7 +14,7 @@ export const nodeAdapter: Adapter = {
     const transformResponse = nodeAdapter.transformResponse!;
 
     return async (config: ServerConfig = {}) => {
-        const { isDev, port, defaultHeaders } = config;
+        const { isDev, port, defaultHeaders, globalMiddlewares } = config;
         await loadRoutes(routesDir);
       
         if (isDev) {
@@ -31,6 +31,11 @@ export const nodeAdapter: Adapter = {
               Object.entries(defaultHeaders).forEach(([key, value]) => {
                 res.setHeader(key, value);
               });
+            }
+
+            if (globalMiddlewares?.beforeRequest) {
+              const result = await globalMiddlewares.beforeRequest(enhancedReq, enhancedRes);
+              if (!result) return;
             }
 
             const shouldContinue = await runMiddlewares('beforeRequest', enhancedReq, enhancedRes);
@@ -55,9 +60,17 @@ export const nodeAdapter: Adapter = {
             (enhancedReq as any).params = route.params;
             await route.handler(enhancedReq, enhancedRes);
 
+            if (globalMiddlewares?.afterRequest) {
+              await globalMiddlewares.afterRequest(enhancedReq, enhancedRes);
+            }
+
             await runMiddlewares('afterRequest', enhancedReq, enhancedRes);
           } catch (error) {
             console.error("Server error:", error);
+
+            if(globalMiddlewares?.onError) {
+              await globalMiddlewares.onError(enhancedReq, enhancedRes, error);
+            }
 
             await runMiddlewares('onError', enhancedReq, enhancedRes, error);
             

@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "http";
+import type { MiddlewareCallback } from "./middleware";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -39,6 +40,11 @@ interface ServerConfig {
     ca?: string | Buffer | Array<string | Buffer>;
   },
   defaultHeaders?: Record<string, string>;
+  globalMiddlewares?: {
+    beforeRequest?: MiddlewareCallback;
+    afterRequest?: MiddlewareCallback;
+    onError?: MiddlewareCallback;
+  };
 }
 
 export type { Handler, RouteHandlers, Route, ServerConfig };
