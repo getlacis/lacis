@@ -1,87 +1,101 @@
 # Zeno
 
-**Zeno** est un framework web léger et performant pour TypeScript, conçu pour offrir une simplicité maximale et une grande flexibilité. Il permet une gestion intuitive des routes basées sur des fichiers et des dossiers, facilitant ainsi la création d'APIs et d'applications web tout en garantissant des performances élevées.
+**Zeno** is a zero-dependency, lightweight web framework for TypeScript, designed for maximum simplicity and flexibility. It provides intuitive file-based routing and makes building APIs and web applications straightforward while ensuring high performance.
 
-> **Avertissement**  
-> Ce projet est destiné à des fins éducatives uniquement. Il n'est pas prêt pour un environnement de production et ne doit pas être utilisé en production. Utilisez-le à vos risques et périls, et assurez-vous de réaliser des tests approfondis avant de l'envisager pour une utilisation en production.
+> **Note**  
+> This project is intended for educational purposes only. It is not production-ready and should not be used in production environments. Use at your own risk, and ensure thorough testing before considering it for production use.
 
+## Features
 
-## Caractéristiques
-
-- **Basé sur des fichiers et des dossiers** : Les routes sont automatiquement générées à partir de la structure des dossiers dans le répertoire `routes/`. Cela simplifie la gestion des routes et facilite la maintenance du code.
+- **No External Dependencies**: Built entirely with TypeScript and Node.js standard libraries.
   
-- **Support des routes dynamiques** : Vous pouvez facilement créer des routes dynamiques en utilisant des paramètres de modèle directement dans le nom des fichiers et des dossiers, par exemple `api/[model].ts`.
+- **File-Based Routing**: Routes are automatically generated from your folder structure in the `routes/` directory, simplifying route management and code maintenance.
+  
+- **Dynamic Routes**: Easily create dynamic routes using template parameters directly in file and folder names, e.g., `api/[model].ts`.
 
-- **Routes statiques** : Créez des routes statiques directement à partir de fichiers de type `.ts` dans des dossiers dédiés (par exemple `api/methods.ts`).
+- **HTTP Method Handlers**: Define specific handlers for different HTTP methods (GET, POST, PUT, DELETE, PATCH) in the same file.
 
-- **Performances optimisées** : Zeno est conçu pour être ultra-performant avec une gestion efficace des routes et une faible empreinte mémoire.
+- **Performance Optimized**: Designed to be ultra-fast with efficient route handling and a minimal memory footprint.
 
-- **Structure simple** : Organisez facilement vos routes en fonction des fichiers et dossiers, ce qui rend le code plus lisible et mieux structuré.
+- **Hot Reloading**: Automatically refresh the application when code changes, providing a smooth development experience without manual server restarts.
 
-- **Hot reloading** : Actualiser automatiquement l'application lors des modifications du code, offrant ainsi une expérience de développement fluide et instantanée sans avoir à redémarrer manuellement le serveur.
+- **Middleware Support**: Add route-specific middleware using `+middleware.ts` files that can run before and after requests.
+
+- **Server-Sent Events (SSE)**: Built-in support for real-time updates using SSE.
+
+- **Multi-Platform**: Runs on Node.js, Vercel, or Netlify with the same codebase.
 
 ## Installation
 
-### Prérequis
+### Prerequisites
 
-Zeno nécessite **Node.js** et **npm** ou **yarn** pour fonctionner. Assurez-vous d'avoir ces outils installés avant de commencer.
+Zeno requires **Node.js** and **npm** or **yarn** to function. Make sure you have these tools installed before getting started.
 
-<!--
-### Installation via npm
+## Project Structure Example
 
-```bash
-npm install zeno
-```
-
-### Installation via yarn
-
-```bash
-yarn add zeno
-```
--->
-
-## Exemple de Structure de Projet
-
-Voici un exemple de structure de dossier que vous pouvez utiliser dans votre projet Zeno :
+Here's an example folder structure for a Zeno project:
 
 ```
 /project-root
-  /src
-    /routes
-      /api
-        [model].ts        # Route dynamique pour un modèle
-        methods.ts           # Route statique
+  /routes
+    +middleware.ts       # Global middleware
+    hello.ts             # Simple route
+    /api
+      +middleware.ts     # API-specific middleware
+      methods.ts         # Route with different HTTP methods
+      [model].ts         # Dynamic route
+      /models
+        [model].ts       # Nested dynamic route
 ```
 
-### Exemple de code pour une route dynamique
+### Example: Dynamic Route
 
-**routes/api/[model].ts** :
+**routes/api/[model].ts**:
 
 ```typescript
-import { Request, Response } from 'zeno';
+import { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request, res: Response) {
-  const model = req.params.model;  // 'model' correspond au nom du fichier entre crochets [model]
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  const { model } = (req as any).params;  // 'model' corresponds to the [model] in the filename
   
-  res.send(`Model: ${model}`);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ message: `Model: ${model}` }));
 }
 ```
 
-### Exemple de code pour une route statique
+### Example: HTTP Method Handlers
 
-**routes/api/methods.ts** :
+**routes/api/methods.ts**:
 
 ```typescript
-import { Request, Response } from 'zeno';
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request, res: Response) {
-  res.send('Ceci est une route statique: /api/methods');
+export async function GET(req: IncomingMessage, res: ServerResponse) {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ message: "Get all users" }));
+}
+
+export async function POST(req: IncomingMessage, res: ServerResponse) {
+  res.writeHead(201, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ message: "Create new user" }));
 }
 ```
 
-## Démarrer le Serveur
+### Example: Simple Route with Enhanced Response
 
-Pour démarrer un serveur avec Zeno, vous pouvez utiliser la fonction `createServer` fournie par le framework.
+**routes/hello.ts**:
+
+```typescript
+import type { Request, Response } from "@/types";
+
+export const GET = async (req: Request, res: Response) => {
+  res.send("Hello World!");
+};
+```
+
+## Starting the Server
+
+To start a server with Zeno, use the `createServer` function:
 
 ```typescript
 import { createServer } from "@core/server";
@@ -89,68 +103,88 @@ import { getRoutesDir } from "@core/router";
 
 const routesDir = getRoutesDir();
 createServer(routesDir);
-
 ```
 
-## Routes
+## NPM Commands
 
-### Routes dynamiques
-
-Les routes dynamiques sont créées à partir de fichiers avec des noms de type `[param]`, où `param` est le nom du paramètre de la route. Par exemple :
-
-- **routes/api/[model].ts** : Une route dynamique où `[model]` peut être n'importe quel modèle passé dans l'URL, comme `/api/user`, `/api/product`, etc.
-
-### Routes statiques
-
-Les routes statiques sont des fichiers `.ts` classiques dans les répertoires de routes. Par exemple, une route statique pour `/api/methods` sera créée à partir de **routes/api/methods.ts**.
-
-## Commandes NPM
-
-### Lancer en mode développement
+### Development Mode
 
 ```bash
 npm run dev
 ```
 
-Cela démarrera un serveur local en mode développement, avec un rechargement automatique des fichiers.
+Starts a local server in development mode with automatic file reloading.
 
-### Compiler en mode production
+### Build for Production
 
 ```bash
 npm run build
 ```
 
-Cela compilera votre code en JavaScript et préparera votre projet pour la production.
+Compiles your code to JavaScript and prepares your project for production.
 
-### Lancer le serveur en mode production
+### Production Mode
 
 ```bash
 npm run start
 ```
 
-Cela démarrera le serveur en mode production, sans rechargement automatique.
+Starts the server in production mode without automatic reloading.
 
-## Contribution
+## Middleware
 
-Zeno est open-source et nous encourageons les contributions ! Si vous souhaitez ajouter une fonctionnalité, corriger un bug, ou améliorer la documentation, n'hésitez pas à créer une pull request.
+Middleware functions let you execute code before and after handling a request. Create a `+middleware.ts` file:
+
+```typescript
+import type { Request, Response } from "@/types";
+
+export const beforeRequest = async (req: Request, res: Response) => {
+  console.log(`Request: ${req.method} ${req.url}`);
+  res.setHeader('X-Custom-Header', 'true');
+  return true; // Continue processing
+};
+
+export const afterRequest = async (req: Request, res: Response) => {
+  console.log(`Response sent with status: ${res.statusCode}`);
+};
+```
+
+## Server-Sent Events (SSE)
+
+Zeno includes built-in support for SSE:
+
+```typescript
+import type { Request, Response } from "@/types";
+
+export async function GET(req: Request, res: Response) {
+  res.initSSE();
+  
+  res.sseSend({ status: "connected" });
+  res.sseEvent("userUpdate", { id: 1, name: "John" });
+  
+  // Close the connection after sending events
+  res.sseClose();
+}
+```
 
 ## License
 
-Zeno est sous la **MIT License**. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+Zeno is under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-## Explication de l'architecture :
+## Architecture Explanation
 
-- **Routes dynamiques** : Les fichiers dans le répertoire `routes/` sont traités comme des routes. Si un fichier utilise la syntaxe `[param]` dans son nom (comme `api/[model].ts`), il est traité comme une route dynamique où `model` sera un paramètre de la requête. Par exemple, une requête à `/api/user` fera correspondre le fichier `api/[model].ts` et vous pourrez récupérer la valeur de `model` comme `req.params.model`.
+- **Dynamic Routes**: Files in the `routes/` directory are treated as routes. If a file uses the `[param]` syntax in its name (like `api/[model].ts`), it's processed as a dynamic route where `model` becomes a request parameter. For example, a request to `/api/user` will match the file `api/[model].ts`, and you can retrieve the value of `model` as `req.params.model`.
 
-- **Routes statiques** : Les fichiers comme `api/methods.ts` sont traités comme des routes statiques et sont accessibles directement à l'URL `/api/methods`.
+- **Static Routes**: Files like `api/methods.ts` are processed as static routes and are directly accessible at the URL `/api/methods`.
 
-### Avantages de Zeno :
-- **Simplicité** : Il est facile à configurer et à utiliser, avec une structure de fichiers intuitive.
-- **Flexibilité** : Il permet de créer des API et des applications web de manière modulaire.
-- **Performance** : Zeno est conçu pour fonctionner avec une faible latence et une gestion optimisée des routes.
+### Advantages of Zeno
+- **Simplicity**: Easy to set up and use with an intuitive file structure.
+- **Flexibility**: Allows you to create APIs and web applications in a modular way.
+- **Performance**: Designed to operate with low latency and optimized route handling.
+- **Zero Dependencies**: Built entirely on Node.js standard libraries with no external packages required.
 
 ---
 
-- ✨ Funfact: Le nom du projet vient du philosophe Zénon et du personnage Zeno de dragon ball. Inutile comme info, faites-en ce que vous voulez.
+✨ **Fun fact**: The project name comes from the philosopher Zeno and the Dragon Ball character Zeno. Useless information, do with it what you will!
