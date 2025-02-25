@@ -57,11 +57,12 @@ export const nodeAdapter: Adapter = {
               return;
             }
       
-            (enhancedReq as any).params = route.params;
+            enhancedReq.params = route.params;
             await route.handler(enhancedReq, enhancedRes);
 
             if (globalMiddlewares?.afterRequest) {
-              await globalMiddlewares.afterRequest(enhancedReq, enhancedRes);
+              const result = await globalMiddlewares.afterRequest(enhancedReq, enhancedRes);
+              if (!result) return;
             }
 
             await runMiddlewares('afterRequest', enhancedReq, enhancedRes);
