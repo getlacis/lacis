@@ -2,17 +2,19 @@
   "name": "zeno",
   "module": "index.ts",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.6",
+    "tscpaths": "^0.0.9"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "scripts": {
     "build": "tsc && tscpaths -p tsconfig.json -s src -o dist",
-    "build:watch": "tsc --watch && tscpaths -p tsconfig.json -s src -o dist"
+    "build:watch": "tsc --watch && tscpaths -p tsconfig.json -s src -o dist",
+    "test": "jest"
   },
-  "type": "module",
-  "dependencies": {
-    "tscpaths": "^0.0.9"
-  }
+  "type": "module"
 }
