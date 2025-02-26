@@ -1,0 +1,16 @@
+{
+    "name": "zeno-examples",
+    "module": "server.ts",
+    "type": "module",
+    "devDependencies": {
+      "@types/bun": "latest"
+    },
+    "scripts": {
+      "start": "NODE_ENV=production bun server.ts",
+      "build": "NODE_ENV=development bun server.ts",
+      "dev": "NODE_ENV=development bun server.ts"
+    },
+    "peerDependencies": {
+      "typescript": "^5.0.0"
+    }
+  }

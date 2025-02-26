@@ -15,10 +15,15 @@ export function initSSE(res: ServerResponse, options?: SSEOptions) {
   });
 
   // Doing this to prevent users from keeping connections open indefinitely, which can cause memory leaks
-  // If it was me I would not do this to keep it simple and optimized
-  setTimeout(() => {
+  const timeoutId = setTimeout(() => {
     res.end();
   }, timeout);
+
+  res.on('close', () => {
+    clearTimeout(timeoutId);
+  });
+
+  return timeoutId;
 }
 
 export function send(res: ServerResponse, data: any) {
