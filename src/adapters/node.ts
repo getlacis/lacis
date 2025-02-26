@@ -4,7 +4,8 @@ import type { Adapter, ServerConfig } from "@/types";
 import { loadRoutes, findRoute } from "@/core/router";
 import { watchRoutes } from "@/core/watcher";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { runMiddlewares } from "@/core/middleware";
+import { addMiddleware, runMiddlewares } from "@/core/middleware";
+import { createTimeoutMiddleware } from "@/utils/timeout";
 
 export const nodeAdapter: Adapter = {
   name: "node",
@@ -41,19 +42,20 @@ export const nodeAdapter: Adapter = {
             const shouldContinue = await runMiddlewares('beforeRequest', enhancedReq, enhancedRes);
 
             if (!shouldContinue) return;
+            
+            const timeoutMiddleware = createTimeoutMiddleware(config);
+            addMiddleware("beforeRequest", timeoutMiddleware);
 
             const route = findRoute(enhancedReq.url || "/", enhancedReq.method || "GET");
       
             if (!route) {
-              res.writeHead(404, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: "Route not found" }));
+              enhancedRes.status(404).setHeader("Content-Type", "application/json").json({ error: "Route not found" });
               return;
             }
       
             if ("error" in route) {
               const status = route.status || 500;
-              res.writeHead(status, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: route.error }));
+              enhancedRes.status(status).setHeader("Content-Type", "application/json").json({ error: route.error });
               return;
             }
       
@@ -77,8 +79,7 @@ export const nodeAdapter: Adapter = {
             await runMiddlewares('onError', enhancedReq, enhancedRes, error);
             
             if(!res.headersSent) {
-              res.writeHead(500, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: "Internal server error" }));
+              enhancedRes.status(500).json({ error: "Internal Server Error" });
             }
           }
         };

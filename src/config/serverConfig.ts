@@ -4,6 +4,7 @@ import type { ServerConfig } from "@/types";
 const defaultConfig: ServerConfig = {
   port: 3000,
   isDev: process.env.NODE_ENV === "development",
+  timeout: 300000,
   platform: "node",
   defaultHeaders: {
     "Access-Control-Allow-Origin": "*",

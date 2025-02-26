@@ -34,6 +34,7 @@ interface ServerConfig {
   isDev?: boolean;
   port?: number;
   platform?: 'node' | 'vercel' | 'netlify';
+  timeout?: number;
   httpsOptions?: {
     cert?: string | Buffer;
     key?: string | Buffer;
