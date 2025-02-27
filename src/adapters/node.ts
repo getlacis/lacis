@@ -164,33 +164,27 @@ export const nodeAdapter: Adapter = {
         ? http.createServer(
             {
               ...serverOptions,
-              agent: agents.http,
             },
             requestListener
           )
         : https.createServer(
             {
               ...serverOptions,
-              agent: agents.https,
             },
             requestListener
           );
 
       server.maxConnections = 10000;
 
-      server.listen(
-        port,
-        () => {
-          if (cluster.isPrimary) {
-            primaryLog(
-              `🚀 Server started on ${
-                isDev ? "http" : "https"
-              }://localhost:${port}${isDev ? " (dev)" : ""}`
-            );
-          }
-        },
-        511
-      );
+      server.listen(port, () => {
+        if (cluster.isPrimary) {
+          primaryLog(
+            `🚀 Server started on ${
+              isDev ? "http" : "https"
+            }://localhost:${port}${isDev ? " (dev)" : ""}`
+          );
+        }
+      });
 
       if (cluster.isWorker && process.send) {
         process.send({ type: "ready" });
