@@ -1,5 +1,5 @@
 import type { Adapter, ServerConfig } from "@/types";
-import { Server } from "bun";
+import { type Server } from "bun";
 import os from "os";
 import cluster from "cluster";
 import { loadRoutes, findRoute } from "@/core/router";
@@ -67,12 +67,12 @@ export const bunAdapter: Adapter = {
             ...request,
             url: url.pathname + url.search,
             method: request.method,
-            headers: Object.fromEntries(request.headers.entries()),
+            headers: request.headers,
             socket: {
               setTimeout: (_: number) => {} // Dummy implementation
             },
             setTimeout: (_: number) => {},
-            rawHeaders: Array.from(request.headers.entries()).flat(),
+            rawHeaders: request.headers,
             connection: {
               remoteAddress: request.headers.get("x-forwarded-for") || "127.0.0.1"
             },

@@ -17,6 +17,9 @@ interface Request extends IncomingMessage {
 }
 
 interface Response extends ServerResponse {
+  headers?: Record<string, string>;
+  body?: any;
+
   json(data: any): void;
   send(data: any): void;
   status(code: number): Response;
