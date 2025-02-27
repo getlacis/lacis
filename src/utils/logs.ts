@@ -1,4 +1,4 @@
-import * as cluster from 'cluster';
+import cluster from 'cluster';
 
 export function primaryLog(...args: any[]) {
   if (cluster.isPrimary) {
