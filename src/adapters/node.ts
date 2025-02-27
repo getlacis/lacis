@@ -10,6 +10,26 @@ import { addMiddleware, runMiddlewares } from "@/core/middleware";
 import { createTimeoutMiddleware } from "@/utils/timeout";
 import { primaryLog } from "@/utils/logs";
 
+const configureHttpAgent = () => {
+  globalAgent.maxSockets = 1000;    
+  globalAgent.keepAlive = true;     
+  globalAgent.maxFreeSockets = 256; 
+  globalAgent.timeout = 60000;
+  
+  https.globalAgent.maxSockets = 1000;
+  https.globalAgent.keepAlive = true;
+  https.globalAgent.maxFreeSockets = 256;
+  https.globalAgent.timeout = 60000;
+  
+  //globalAgent.setNoDelay(true);
+  //https.globalAgent.setNoDelay(true);
+  
+  return {
+    http: globalAgent,
+    https: https.globalAgent
+  };
+};
+
 export const nodeAdapter: Adapter = {
   name: "node",
   createHandler: (routesDir: string) => {
@@ -18,6 +38,18 @@ export const nodeAdapter: Adapter = {
 
     return async (config: ServerConfig = {}) => {
       const { isDev, port, defaultHeaders, globalMiddlewares, cluster: clusterConfig } = config;
+      
+      // Configurer les agents HTTP pour optimiser les performances
+      const agents = configureHttpAgent();
+      
+      if (cluster.isPrimary) {
+        primaryLog("🚀 Performance optimizations enabled:");
+        primaryLog(`   - Max sockets: ${agents.http.maxSockets}`);
+        primaryLog(`   - Keep-alive: ${agents.http.keepAlive}`);
+        primaryLog(`   - Max free sockets: ${agents.http.maxFreeSockets}`);
+        primaryLog(`   - Socket timeout: ${agents.http.timeout}ms`);
+        primaryLog(`   - TCP no delay: enabled`);
+      }
       
       if (clusterConfig?.enabled && cluster.isPrimary) {
         const numWorkers = clusterConfig.workers || os.cpus().length;
@@ -37,7 +69,6 @@ export const nodeAdapter: Adapter = {
         });
         
         cluster.on('message', (worker, message) => {
-          // TODO: Log only in dev mode
           if (message.type === 'ready') {
             primaryLog(`Worker ${worker.process.pid} is ready`);
           }
@@ -53,6 +84,13 @@ export const nodeAdapter: Adapter = {
       }
 
       const requestListener: http.RequestListener = async (req, res) => {
+        req.setTimeout(30000); // 30 secondes
+        
+        if (req.headers.connection !== 'close') {
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('Keep-Alive', 'timeout=5, max=1000');
+        }
+
         const enhancedReq = transformRequest(req);
         const enhancedRes = transformResponse(res);
 
@@ -112,13 +150,26 @@ export const nodeAdapter: Adapter = {
         }
       };
     
+      const serverOptions = {
+        keepAliveTimeout: 120000,      
+        maxHeadersCount: 100,        
+        headersTimeout: 60000,        
+        requestTimeout: 300000,       
+      };
+      
       const server = isDev
-        ? http.createServer(requestListener)
-        : https.createServer({}, requestListener);
-    
+        ? http.createServer(serverOptions, requestListener)
+        : https.createServer({
+            ...serverOptions,
+          }, requestListener);
+      
+      server.maxConnections = 10000;
+      
       server.listen(port, () => {
-        // TODO: Find a way to log "Server started"
-      });
+        if (cluster.isPrimary) {
+          primaryLog(`🚀 Server started on ${isDev ? "http" : "https"}://localhost:${port}${isDev ? " (dev)" : ""}`);
+        }
+      }, 511);
       
       if (cluster.isWorker && process.send) {
         process.send({ type: 'ready' });
