@@ -151,6 +151,7 @@ export const nodeAdapter: Adapter = {
       };
     
       const serverOptions = {
+        maxConnections: 10000,
         keepAliveTimeout: 120000,      
         maxHeadersCount: 100,        
         headersTimeout: 60000,        
