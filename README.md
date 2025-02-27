@@ -58,8 +58,7 @@ import { Response, Request } from "zeno";
 export default async function handler(req: Request, res: Response) {
   const { model } = (req as any).params;  // 'model' corresponds to the [model] in the filename
   
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ message: `Model: ${model}` }));
+  res.json({ message: `Model: ${model}` })
 }
 ```
 
@@ -71,13 +70,11 @@ export default async function handler(req: Request, res: Response) {
 import { Response, Request } from "zeno";
 
 export async function GET(req: Request, res: Response) {
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ message: "Get all users" }));
+  res.json({ message: "Get all users" });
 }
 
 export async function POST(req: Request, res: Response) {
-  res.writeHead(201, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ message: "Create new user" }));
+  res.json({ message: "Create new user" });
 }
 ```
 
