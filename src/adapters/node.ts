@@ -10,26 +10,6 @@ import { addMiddleware, runMiddlewares } from "@/core/middleware";
 import { createTimeoutMiddleware } from "@/utils/timeout";
 import { primaryLog } from "@/utils/logs";
 
-const configureHttpAgent = () => {
-  globalAgent.maxSockets = 1000;
-  globalAgent.keepAlive = true;
-  globalAgent.maxFreeSockets = 256;
-  globalAgent.timeout = 60000;
-
-  https.globalAgent.maxSockets = 1000;
-  https.globalAgent.keepAlive = true;
-  https.globalAgent.maxFreeSockets = 256;
-  https.globalAgent.timeout = 60000;
-
-  //globalAgent.setNoDelay(true);
-  //https.globalAgent.setNoDelay(true);
-
-  return {
-    http: globalAgent,
-    https: https.globalAgent,
-  };
-};
-
 export const nodeAdapter: Adapter = {
   name: "node",
   createHandler: (routesDir: string) => {
@@ -44,18 +24,6 @@ export const nodeAdapter: Adapter = {
         globalMiddlewares,
         cluster: clusterConfig,
       } = config;
-
-      // Configurer les agents HTTP pour optimiser les performances
-      const agents = configureHttpAgent();
-
-      if (cluster.isPrimary) {
-        primaryLog("🚀 Performance optimizations enabled:");
-        primaryLog(`   - Max sockets: ${agents.http.maxSockets}`);
-        primaryLog(`   - Keep-alive: ${agents.http.keepAlive}`);
-        primaryLog(`   - Max free sockets: ${agents.http.maxFreeSockets}`);
-        primaryLog(`   - Socket timeout: ${agents.http.timeout}ms`);
-        primaryLog(`   - TCP no delay: enabled`);
-      }
 
       if (clusterConfig?.enabled && cluster.isPrimary) {
         const numWorkers = clusterConfig.workers || os.cpus().length;
