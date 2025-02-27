@@ -31,7 +31,7 @@ const configureHttpAgent = () => {
 };
 
 export const nodeAdapter: Adapter = {
-  name: "node",
+  name: "node", 
   createHandler: (routesDir: string) => {
     const transformRequest = nodeAdapter.transformRequest!;
     const transformResponse = nodeAdapter.transformResponse!;
@@ -151,7 +151,6 @@ export const nodeAdapter: Adapter = {
       };
     
       const serverOptions = {
-        maxConnections: 10000,
         keepAliveTimeout: 120000,      
         maxHeadersCount: 100,        
         headersTimeout: 60000,        
@@ -159,10 +158,14 @@ export const nodeAdapter: Adapter = {
       };
       
       const server = isDev
-        ? http.createServer(serverOptions, requestListener)
-        : https.createServer({
-            ...serverOptions,
-          }, requestListener);
+      ? http.createServer({
+          ...serverOptions,
+          agent: agents.http
+        }, requestListener)
+      : https.createServer({
+          ...serverOptions,
+          agent: agents.https
+        }, requestListener);
       
       server.maxConnections = 10000;
       
