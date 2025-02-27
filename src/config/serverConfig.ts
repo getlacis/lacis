@@ -5,6 +5,10 @@ const defaultConfig: ServerConfig = {
   port: 3000,
   isDev: process.env.NODE_ENV === "development",
   timeout: 300000,
+  cluster: {
+    enabled: true,
+    workers: undefined
+  },
   platform: "node",
   defaultHeaders: {
     "Access-Control-Allow-Origin": "*",

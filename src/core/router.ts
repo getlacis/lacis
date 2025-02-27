@@ -99,7 +99,6 @@ function findRoute(url: string, method: string = "GET") {
 function getRoutesDir(customDir?: string) {
   const projectRoot = process.cwd();
   const routesDir = customDir || process.env.ROUTES_DIR || "routes";
-  console.log(path.resolve(projectRoot, routesDir));
   return path.resolve(projectRoot, routesDir);
 }
 

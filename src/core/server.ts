@@ -3,6 +3,7 @@ import { defaultConfig, type ServerConfig } from "@/config/serverConfig";
 import { loadRoutes } from './router';
 import { watchRoutes } from './watcher';
 import type { Server } from 'http';
+import { primaryLog } from '@/utils/logs';
 
 async function createServer(
   routesDir: string,
@@ -12,7 +13,7 @@ async function createServer(
   
   if (config.isDev) {
     watchRoutes(routesDir);
-    console.log("🔥 Dev mode activated");
+    primaryLog("🔥 Dev mode activated");
   }
 
   const adapter = getAdapter(platform);

@@ -40,12 +40,18 @@ interface ServerConfig {
     key?: string | Buffer;
     ca?: string | Buffer | Array<string | Buffer>;
   },
+  cluster?: ClusterConfig;
   defaultHeaders?: Record<string, string>;
   globalMiddlewares?: {
     beforeRequest?: MiddlewareCallback;
     afterRequest?: MiddlewareCallback;
     onError?: MiddlewareCallback;
   };
+}
+
+export interface ClusterConfig {
+  enabled: boolean;
+  workers?: number; // Number of workers, defaults to CPU cores
 }
 
 export type { Handler, RouteHandlers, Route, ServerConfig };
