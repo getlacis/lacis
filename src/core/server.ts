@@ -22,6 +22,8 @@ async function createServer(
   switch (platform) {
     case 'node':
       return (handler as (config?: ServerConfig) => Server)(config);
+    case 'bun':
+      return (handler as (config?: ServerConfig) => void)(config);
     case 'vercel':
     case 'netlify':
       return handler;

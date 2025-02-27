@@ -33,7 +33,7 @@ type Route = {
 interface ServerConfig {
   isDev?: boolean;
   port?: number;
-  platform?: 'node' | 'vercel' | 'netlify';
+  platform?: 'node' | 'vercel' | 'netlify' | 'bun';
   timeout?: number;
   httpsOptions?: {
     cert?: string | Buffer;
