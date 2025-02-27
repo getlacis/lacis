@@ -53,9 +53,9 @@ Here's an example folder structure for a Zeno project:
 **routes/api/[model].ts**:
 
 ```typescript
-import { IncomingMessage, ServerResponse } from "http";
+import { Response, Request } from "zeno";
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: Request, res: Response) {
   const { model } = (req as any).params;  // 'model' corresponds to the [model] in the filename
   
   res.writeHead(200, { "Content-Type": "application/json" });
@@ -68,14 +68,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 **routes/api/methods.ts**:
 
 ```typescript
-import type { IncomingMessage, ServerResponse } from "http";
+import { Response, Request } from "zeno";
 
-export async function GET(req: IncomingMessage, res: ServerResponse) {
+export async function GET(req: Request, res: Response) {
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ message: "Get all users" }));
 }
 
-export async function POST(req: IncomingMessage, res: ServerResponse) {
+export async function POST(req: Request, res: Response) {
   res.writeHead(201, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ message: "Create new user" }));
 }
@@ -86,7 +86,7 @@ export async function POST(req: IncomingMessage, res: ServerResponse) {
 **routes/hello.ts**:
 
 ```typescript
-import type { Request, Response } from "@/types";
+import type { Request, Response } from "zeno";
 
 export const GET = async (req: Request, res: Response) => {
   res.send("Hello World!");
@@ -98,8 +98,7 @@ export const GET = async (req: Request, res: Response) => {
 To start a server with Zeno, use the `createServer` function:
 
 ```typescript
-import { createServer } from "@core/server";
-import { getRoutesDir } from "@core/router";
+import { createServer, getRoutesDir } from "zeno";
 
 const routesDir = getRoutesDir();
 createServer(routesDir);
@@ -136,7 +135,7 @@ Starts the server in production mode without automatic reloading.
 Middleware functions let you execute code before and after handling a request. Create a `+middleware.ts` file:
 
 ```typescript
-import type { Request, Response } from "@/types";
+import type { Request, Response } from "zeno";
 
 export const beforeRequest = async (req: Request, res: Response) => {
   console.log(`Request: ${req.method} ${req.url}`);
@@ -154,7 +153,7 @@ export const afterRequest = async (req: Request, res: Response) => {
 Zeno includes built-in support for SSE:
 
 ```typescript
-import type { Request, Response } from "@/types";
+import type { Request, Response } from "zeno";
 
 export async function GET(req: Request, res: Response) {
   res.initSSE();
