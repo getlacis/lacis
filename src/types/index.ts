@@ -30,7 +30,9 @@ type Route = {
   params: string[];
 };
 
+// Dans src/types/index.ts
 interface ServerConfig {
+  // Options existantes
   isDev?: boolean;
   port?: number;
   platform?: 'node' | 'vercel' | 'netlify' | 'bun';
@@ -40,24 +42,44 @@ interface ServerConfig {
     key?: string | Buffer;
     ca?: string | Buffer | Array<string | Buffer>;
   },
-  cluster?: ClusterConfig;
+  cluster?: {
+    enabled: boolean;
+    workers?: number;
+    loadBalancing?: 'round-robin' | 'least-connections' | 'least-cpu' | 'fastest-response';
+    stickySessions?: boolean;
+  };
   defaultHeaders?: Record<string, string>;
   globalMiddlewares?: {
     beforeRequest?: MiddlewareCallback;
     afterRequest?: MiddlewareCallback;
     onError?: MiddlewareCallback;
   };
+  
+  // Nouvelles options ajoutées
+  monitoring?: {
+    enabled: boolean;
+    sampleInterval?: number;
+    reportInterval?: number;
+    thresholds?: {
+      cpu?: number;
+      memory?: number;
+      responseTime?: number;
+      errorRate?: number;
+    };
+  };
 }
 
-export interface ClusterConfig {
+interface ClusterConfig {
   enabled: boolean;
   workers?: number; // Number of workers, defaults to CPU cores
 }
 
-export type { Handler, RouteHandlers, Route, ServerConfig };
+export type { Handler, RouteHandlers, Route, ServerConfig, ClusterConfig };
 export * from "./sse";
 export * from "./adapter";
 export * from "./platform";
 export * from "./enhancer";
 export * from "./platform";
 export * from "./middleware";
+export * from "./monitor";
+export * from "./loadBalancer";
