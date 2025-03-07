@@ -55,7 +55,6 @@ interface ServerConfig {
     onError?: MiddlewareCallback;
   };
   
-  // Nouvelles options ajoutées
   monitoring?: {
     enabled: boolean;
     sampleInterval?: number;
