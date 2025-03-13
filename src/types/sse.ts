@@ -6,6 +6,8 @@ interface SSEOptions {
 interface SSEClientOptions {
   reconnectInterval?: number;
   maxRetries?: number;
+  body?: string | Record<string, any>;
+  contentType?: string;
 }
 
 interface SSEEventHandlers {

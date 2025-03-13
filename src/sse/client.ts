@@ -14,7 +14,7 @@ export function createSSEClient(
   options: SSEClientOptions = {},
   handlers: SSEEventHandlers = {},
   req?: IncomingMessage
-): SSEClient {
+): Promise<SSEClient> | SSEClient {
   // State management
   let isConnected = false;
   let retryCount = 0;
@@ -37,6 +37,9 @@ export function createSSEClient(
 
   const reconnectInterval = options.reconnectInterval || 3000;
   const maxRetries = options.maxRetries || 3;
+  // Support du corps de requête
+  const requestBody = options.body;
+  const contentType = options.contentType || (requestBody ? 'application/json' : undefined);
 
   // If first argument is a request object, treat it as an existing SSE connection
   if (typeof urlOrReq !== "string") {
@@ -57,6 +60,15 @@ export function createSSEClient(
     });
 
     return createClientInterface();
+  }
+
+  // Pour les connexions avec URL, retourner une promesse pour permettre une utilisation async/await
+  if (typeof urlOrReq === "string") {
+    return new Promise((resolve, reject) => {
+      startListening()
+        .then(() => resolve(createClientInterface()))
+        .catch(reject);
+    });
   }
 
   // Parses incoming SSE data chunks and triggers appropriate handlers
@@ -105,9 +117,7 @@ export function createSSEClient(
   }
 
   // Creates the public interface for interacting with the SSE client
-  function createClientInterface() {
-    startListening().catch(console.error);
-
+  function createClientInterface(): SSEClient {
     return {
       // Register handler for all messages
       onMessage(callback: (data: any) => void) {
@@ -169,12 +179,17 @@ export function createSSEClient(
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
-        method: "GET",
+        method: requestBody ? "POST" : "GET", // Utiliser POST si un corps est fourni
         headers: {
           Accept: "text/event-stream",
           ...(req?.headers || {}),
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
+          ...(contentType && { "Content-Type": contentType }),
+          ...(requestBody && typeof requestBody === "string" && 
+              { "Content-Length": Buffer.byteLength(requestBody).toString() }),
+          ...(requestBody && typeof requestBody !== "string" && 
+              { "Content-Length": Buffer.byteLength(JSON.stringify(requestBody)).toString() })
         },
       };
 
@@ -224,6 +239,15 @@ export function createSSEClient(
         request = null;
         reject(error);
       });
+
+      // Envoyer le corps de la requête si présent
+      if (requestBody) {
+        if (typeof requestBody === "string") {
+          request.write(requestBody);
+        } else {
+          request.write(JSON.stringify(requestBody));
+        }
+      }
 
       request.end();
     });
