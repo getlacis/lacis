@@ -28,6 +28,22 @@ function enhanceRequest(req: IncomingMessage): Request {
     return createSSEClient(this, options, handlers);
   };
 
+  enhanced.bindJSON = function <T>(): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let body = "";
+      this.on("data", (chunk) => {
+        body += chunk;
+      });
+      this.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  };
+
   return enhanced;
 }
 
