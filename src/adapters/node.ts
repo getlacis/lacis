@@ -26,10 +26,9 @@ export const nodeAdapter: Adapter = {
         defaultHeaders,
         globalMiddlewares,
         cluster: clusterConfig,
-        monitoring = { enabled: true }
+        monitoring = { enabled: false }
       } = config;
       
-      // Initialiser le monitoring si activé
       let performanceMonitor = null;
       if (monitoring.enabled) {
         performanceMonitor = getMonitor({
