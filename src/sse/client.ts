@@ -7,8 +7,14 @@ import type {
   SSEClient,
 } from "@/types/index";
 
-// Creates a Server-Sent Events (SSE) client that can handle both URL connections and existing SSE streams
-// Need some comments here since I have difficulty modifying this, sse is kinda freaky
+/**
+ * Creates a Server-Sent Events (SSE) client that can handle both URL connections and existing SSE streams
+ * @param urlOrReq - URL to connect to or an existing IncomingMessage
+ * @param options - Configuration options for the SSE client
+ * @param handlers - Event handlers for the SSE connection
+ * @param req - Optional IncomingMessage to inherit headers from
+ * @returns A Promise resolving to an SSE client for URL connections, or an SSE client directly for existing connections
+ */
 export function createSSEClient(
   urlOrReq: string | IncomingMessage,
   options: SSEClientOptions = {},
@@ -35,11 +41,14 @@ export function createSSEClient(
     });
   }
 
+  // Extract options with defaults
   const reconnectInterval = options.reconnectInterval || 3000;
   const maxRetries = options.maxRetries || 3;
-  // Support du corps de requête
+  const disableReconnect = options.disableReconnect || false;
   const requestBody = options.body;
   const contentType = options.contentType || (requestBody ? 'application/json' : undefined);
+  // Si la méthode n'est pas spécifiée, utiliser POST si un corps est fourni, sinon GET
+  const method = options.method || (requestBody ? "POST" : "GET");
 
   // If first argument is a request object, treat it as an existing SSE connection
   if (typeof urlOrReq !== "string") {
@@ -160,7 +169,7 @@ export function createSSEClient(
     try {
       await connect();
     } catch (error) {
-      if (retryCount < maxRetries) {
+      if (!disableReconnect && retryCount < maxRetries) {
         retryCount++;
         setTimeout(() => {
           startListening();
@@ -175,11 +184,29 @@ export function createSSEClient(
     return new Promise((resolve, reject) => {
       // Configure HTTP/HTTPS request options
       const parsedUrl = new URL(urlOrReq as string);
-      const options = {
+      
+      // Ajouter les paramètres de requête s'ils sont fournis
+      if (options.params) {
+        // Si params est un objet
+        if (typeof options.params === 'object') {
+          Object.entries(options.params).forEach(([key, value]) => {
+            parsedUrl.searchParams.append(key, String(value));
+          });
+        } 
+        // Si params est une chaîne
+        else if (typeof options.params === 'string') {
+          const searchParams = new URLSearchParams(options.params);
+          searchParams.forEach((value, key) => {
+            parsedUrl.searchParams.append(key, value);
+          });
+        }
+      }
+      
+      const requestOptions = {
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
-        method: requestBody ? "POST" : "GET", // Utiliser POST si un corps est fourni
+        method: method, // Utiliser la méthode définie plus haut
         headers: {
           Accept: "text/event-stream",
           ...(req?.headers || {}),
@@ -195,7 +222,7 @@ export function createSSEClient(
 
       // Create appropriate client based on protocol
       const client = parsedUrl.protocol === "https:" ? https : http;
-      request = client.request(options, (response) => {
+      request = client.request(requestOptions, (response) => {
         // Handle non-200 responses
         if (response.statusCode !== 200) {
           isConnected = false;

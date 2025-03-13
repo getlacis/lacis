@@ -8,6 +8,9 @@ interface SSEClientOptions {
   maxRetries?: number;
   body?: string | Record<string, any>;
   contentType?: string;
+  method?: "GET" | "POST" | "PUT";
+  params?: string | Record<string, string>;
+  disableReconnect?: boolean;
 }
 
 interface SSEEventHandlers {

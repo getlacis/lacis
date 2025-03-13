@@ -16,6 +16,7 @@ import type {
   SSEEventHandlers,
   Response,
   Request,
+  SSEClient,
 } from "@/types";
 
 function enhanceRequest(req: IncomingMessage): Request {
@@ -24,8 +25,8 @@ function enhanceRequest(req: IncomingMessage): Request {
   enhanced.createSSEClient = function (
     options?: SSEClientOptions,
     handlers?: SSEEventHandlers
-  ) {
-    return createSSEClient(this, options, handlers);
+  ): SSEClient {
+    return createSSEClient(this, options, handlers) as SSEClient;
   };
 
   enhanced.bindJSON = function <T>(): Promise<T> {
