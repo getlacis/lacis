@@ -2,6 +2,7 @@ import { watch, type FSWatcher } from "fs";
 import debounce from "@/utils/debounce";
 import { loadRoutes, setVerboseLogging } from "./router";
 import { existsSync } from "fs";
+import { primaryLog } from "@/utils/logs";
 
 let fileWatcher: FSWatcher | null = null;
 let isWatching = false;
@@ -18,7 +19,7 @@ function watchRoutes(routesDir: string, verbose: boolean = false) {
   }
 
   if (!existsSync(routesDir)) {
-    console.error(`Le dossier '${routesDir}' n'existe pas. Surveillance impossible.`);
+    console.error(`Directory '${routesDir}' does not exist. Cannot watch.`);
     return;
   }
 
@@ -30,17 +31,17 @@ function watchRoutes(routesDir: string, verbose: boolean = false) {
 
     try {
       if (verbose) {
-        console.log(`🔄 Changement détecté${filename ? ` dans "${filename}"` : ""}, rechargement...`);
+        primaryLog(`🔄 Change detected${filename ? ` in "${filename}"` : ""}, reloading...`);
       }
       
       await loadRoutes(routesDir);
       
       if (verbose) {
-        console.log('✅ Routes rechargées');
+        primaryLog('✅ Routes reloaded successfully');
       }
     } catch (error) {
       if (verbose) {
-        console.error('❌ Erreur lors du rechargement des routes:', error);
+        primaryLog('❌ Error reloading routes:', error);
       }
     } finally {
       isReloading = false;
@@ -71,11 +72,11 @@ function watchRoutes(routesDir: string, verbose: boolean = false) {
     isWatching = true;
     
     if (verbose) {
-      console.log(`👀 Surveillance du dossier '${routesDir}' activée`);
+      primaryLog(`👀 Watching directory '${routesDir}'`);
     }
   } catch (error) {
     if (verbose) {
-      console.error(`❌ Erreur lors de l'initialisation de la surveillance:`, error);
+      primaryLog(`❌ Error initializing watcher:`, error);
     }
     isWatching = false;
   }
