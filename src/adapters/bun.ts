@@ -1,14 +1,19 @@
 import type { Adapter, ServerConfig } from "@/types";
 import { type Server } from "bun";
-import os from "os";
-import cluster from "cluster";
 import { loadRoutes, findRoute } from "@/core/router";
 import { watchRoutes } from "@/core/watcher";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { addMiddleware, runMiddlewares } from "@/core/middleware";
-import { createTimeoutMiddleware } from "@/utils/timeout";
+import { runMiddlewares } from "@/core/middleware";
 import { primaryLog } from "@/utils/logs";
 import { EventEmitter } from "events";
+
+/**
+ * No clustering because it currently degrades performance in Bun.
+ * and a larger route cache (2000 entries) and optimized eviction (10%) for higher hit ratio in Bun, already try with Node, it doesn't improve it.
+*/
+
+const routeCache = new Map<string, any>();
+const MAX_ROUTE_CACHE = 2000;
 
 export const bunAdapter: Adapter = {
   name: "bun",
@@ -17,74 +22,42 @@ export const bunAdapter: Adapter = {
     const transformResponse = bunAdapter.transformResponse!;
 
     return async (config: ServerConfig = {}) => {
-      const { isDev, port = 3000, defaultHeaders, globalMiddlewares, cluster: clusterConfig } = config;
+      const { 
+        isDev, 
+        port = 3000, 
+        defaultHeaders
+      } = config;
       
-      if (cluster.isPrimary) {
-        primaryLog("🚀 Bun performance optimizations enabled");
-        primaryLog("   - Using Bun's native HTTP server with optimal defaults");
-      }
-      
-      if (clusterConfig?.enabled && cluster.isPrimary) {
-        const numWorkers = clusterConfig.workers || os.cpus().length;
-        
-        primaryLog(`🧵 Starting server with ${numWorkers} workers`);
-        
-        for (let i = 0; i < numWorkers; i++) {
-          cluster.fork();
-        }
-        
-        cluster.on('exit', (worker, code, signal) => {
-          primaryLog(`Worker ${worker.process.pid} died with ${signal || code}. Restarting...`);
-          setTimeout(() => {
-            const newWorker = cluster.fork();
-            primaryLog(`New worker ${newWorker.process.pid} started to replace ${worker.process.pid}`);
-          }, 1000);
-        });
-        
-        cluster.on('message', (worker, message) => {
-          if (message.type === 'ready') {
-            primaryLog(`Worker ${worker.process.pid} is ready`);
-          }
-        });
-        
-        return { close: () => {} };
-      }
+      primaryLog("🚀 Bun high-performance mode enabled");
       
       await loadRoutes(routesDir);
       
-      if (isDev && cluster.isPrimary) {
+      if (isDev) {
         watchRoutes(routesDir);
       }
 
-      let server: Server;
+      const defaultHeadersEntries = defaultHeaders ? Object.entries(defaultHeaders) : [];
 
-      server = Bun.serve({
+      const server = Bun.serve({
         port,
         async fetch(request) {
           const url = new URL(request.url);
           const responseEmitter = new EventEmitter();
+          
           const bunReq = {
             ...request,
             url: url.pathname + url.search,
             method: request.method,
             headers: request.headers,
-            socket: {
-              setTimeout: (_: number) => {} // Dummy implementation
-            },
+            socket: { setTimeout: (_: number) => {} },
             setTimeout: (_: number) => {},
-            rawHeaders: request.headers,
             connection: {
               remoteAddress: request.headers.get("x-forwarded-for") || "127.0.0.1"
             },
-            async text() {
-              return await request.text();
-            },
-            async json() {
-              return await request.json();
-            }
+            async text() { return await request.text(); },
+            async json() { return await request.json(); }
           };
           
-          // TODO: Make an "helper" function to create a response object
           const bunRes = {
             statusCode: 200,
             headers: new Headers(),
@@ -98,10 +71,6 @@ export const bunAdapter: Adapter = {
             },
             once: (event: string, listener: (...args: any[]) => void) => {
               responseEmitter.once(event, listener);
-              return bunRes;
-            },
-            removeListener: (event: string, listener: (...args: any[]) => void) => {
-              responseEmitter.removeListener(event, listener);
               return bunRes;
             },
             emit: (event: string, ...args: any[]) => {
@@ -121,9 +90,9 @@ export const bunAdapter: Adapter = {
             hasHeader(name: string) {
               return this.headers.has(name);
             },
-            writeHead(statusCode: number, headers?: Record<string, string> | string[] | null) {
+            writeHead(statusCode: number, headers?: Record<string, string> | null) {
               this.statusCode = statusCode;
-              if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+              if (headers && typeof headers === 'object') {
                 Object.entries(headers).forEach(([key, value]) => {
                   this.headers.set(key, value);
                 });
@@ -135,16 +104,12 @@ export const bunAdapter: Adapter = {
               return this;
             },
             write(chunk: any) {
-              if (this.body === null) {
-                this.body = '';
-              }
+              if (this.body === null) this.body = '';
               this.body += chunk;
               return true;
             },
             end(data?: any) {
-              if (data !== undefined) {
-                this.write(data);
-              }
+              if (data !== undefined) this.write(data);
               this.headersSent = true;
               this.finished = true;
               this.writableEnded = true;
@@ -165,48 +130,38 @@ export const bunAdapter: Adapter = {
           };
 
           try {
-            if (!request.headers.get("connection") || request.headers.get("connection") !== 'close') {
-              bunRes.setHeader('Connection', 'keep-alive');
-              bunRes.setHeader('Keep-Alive', 'timeout=5, max=1000');
+            bunRes.setHeader('Connection', 'keep-alive');
+            
+            if (defaultHeadersEntries.length > 0) {
+              for (let i = 0; i < defaultHeadersEntries.length; i++) {
+                bunRes.setHeader(defaultHeadersEntries[i][0], defaultHeadersEntries[i][1]);
+              }
             }
 
             const enhancedReq = transformRequest(bunReq as any);
             const enhancedRes = transformResponse(bunRes as any);
 
-            if (defaultHeaders) {
-              Object.entries(defaultHeaders).forEach(([key, value]) => {
-                enhancedRes.setHeader(key, value);
-              });
-            }
-
-            if (globalMiddlewares?.beforeRequest) {
-              const result = await globalMiddlewares.beforeRequest(enhancedReq, enhancedRes);
-              if (!result) {
-                if (!enhancedRes.headersSent) {
-                  enhancedRes.end();
-                }
-                return new Response(enhancedRes.body, {
-                  status: enhancedRes.statusCode,
-                  headers: enhancedRes.headers
-                });
-              }
-            }
-
             const shouldContinue = await runMiddlewares('beforeRequest', enhancedReq, enhancedRes);
-            if (!shouldContinue) {
-              if (!enhancedRes.headersSent) {
-                enhancedRes.end();
-              }
+            if (!shouldContinue || enhancedRes.headersSent) {
               return new Response(enhancedRes.body, {
                 status: enhancedRes.statusCode,
                 headers: enhancedRes.headers
               });
             }
-            
-            const timeoutMiddleware = createTimeoutMiddleware(config);
-            addMiddleware("beforeRequest", timeoutMiddleware);
 
-            const route = findRoute(url.pathname, request.method);
+            const cacheKey = `${enhancedReq.method}:${url.pathname}`;
+            let route = routeCache.get(cacheKey);
+            
+            if (!route) {
+              route = findRoute(url.pathname, request.method);
+              if (route) {
+                routeCache.set(cacheKey, route);
+                if (routeCache.size > MAX_ROUTE_CACHE) {
+                  const keysToDelete = Array.from(routeCache.keys()).slice(0, MAX_ROUTE_CACHE / 10);
+                  for (const key of keysToDelete) routeCache.delete(key);
+                }
+              }
+            }
       
             if (!route) {
               enhancedRes.writeHead(404, { "Content-Type": "application/json" });
@@ -230,61 +185,32 @@ export const bunAdapter: Adapter = {
             enhancedReq.params = route.params;
             await route.handler(enhancedReq, enhancedRes);
 
-            if (globalMiddlewares?.afterRequest) {
-              const result = await globalMiddlewares.afterRequest(enhancedReq, enhancedRes);
-              if (!result && !enhancedRes.headersSent) {
+            if (!enhancedRes.headersSent) {
+              await runMiddlewares('afterRequest', enhancedReq, enhancedRes);
+              
+              if (!enhancedRes.headersSent) {
                 enhancedRes.end();
               }
-            }
-
-            await runMiddlewares('afterRequest', enhancedReq, enhancedRes);
-            
-            // Make sure the response is properly ended
-            if (!enhancedRes.headersSent) {
-              enhancedRes.end();
             }
             
             return new Response(enhancedRes.body, {
               status: enhancedRes.statusCode,
               headers: enhancedRes.headers
             });
-
           } catch (error) {
-            console.error("Server error:", error);
-
-            if (globalMiddlewares?.onError) {
-              await globalMiddlewares.onError(bunReq as any, bunRes as any, error);
-            }
-
-            await runMiddlewares('onError', bunReq as any, bunRes as any, error);
-            
-            if (!bunRes.headersSent) {
-              bunRes.writeHead(500, { "Content-Type": "application/json" });
-              bunRes.end(JSON.stringify({ error: "Internal Server Error" }));
+            if (isDev) {
+              console.error("Server error:", error);
             }
             
-            return new Response(bunRes.body || JSON.stringify({ error: "Internal Server Error" }), {
-              status: bunRes.statusCode || 500,
-              headers: bunRes.headers
+            return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" }
             });
           }
-        },
-        error(error) {
-          console.error("Server error:", error);
-          return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" }
-          });
         }
       });
 
-      if (cluster.isPrimary) {
-        primaryLog(`🚀 Server started on http://localhost:${port}${isDev ? " (dev)" : ""}`);
-      }
-      
-      if (cluster.isWorker && process.send) {
-        process.send({ type: 'ready' });
-      }
+      primaryLog(`🚀 Server started on http://localhost:${port}${isDev ? " (dev)" : ""}`);
     
       return {
         close: () => {
@@ -293,6 +219,7 @@ export const bunAdapter: Adapter = {
       };
     };
   },
+  
   transformRequest: (req) => enhanceRequest(req),
   transformResponse: (res) => enhanceResponse(res),
 };
