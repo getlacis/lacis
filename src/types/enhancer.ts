@@ -9,12 +9,12 @@ import type {
 interface Request extends IncomingMessage {
   params?: Record<string, string>;
   query?: Record<string, string>;
-  body?: any;
   createSSEClient(
     options?: SSEClientOptions,
     handlers?: SSEEventHandlers
   ): SSEClient;
   bindJSON<T>(): Promise<T>;
+  body(): Promise<Buffer>;
 }
 
 interface Response extends ServerResponse {

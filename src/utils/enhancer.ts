@@ -30,18 +30,15 @@ function enhanceRequest(req: IncomingMessage): Request {
   };
 
   enhanced.bindJSON = function <T>(): Promise<T> {
+    return this.body().then((buffer) => JSON.parse(buffer.toString()));
+  }
+
+  enhanced.body = function (): Promise<Buffer> {
+    const chunks: Buffer[] = [];
     return new Promise((resolve, reject) => {
-      let body = "";
-      this.on("data", (chunk) => {
-        body += chunk;
-      });
-      this.on("end", () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (error) {
-          reject(error);
-        }
-      });
+      this.on("data", (chunk: Buffer) => chunks.push(chunk))
+          .on("end", () => resolve(Buffer.concat(chunks)))
+          .on("error", reject);
     });
   };
 
