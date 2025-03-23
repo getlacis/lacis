@@ -33,6 +33,54 @@ function enhanceRequest(req: IncomingMessage): Request {
     return this.body().then((buffer) => JSON.parse(buffer.toString()));
   }
 
+  enhanced.bindForm = function <T>(): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let contentType = this.headers['content-type'];
+
+      if (!contentType || !contentType.startsWith('multipart/form-data')) {
+        reject(new Error('Content-Type is not multipart/form-data'));
+        return;
+      }
+
+      const boundaryMatch = contentType.match(/boundary=(.+)$/);
+      if (!boundaryMatch) {
+        reject(new Error('Boundary not found in Content-Type'));
+        return;
+      }
+
+      const boundary = boundaryMatch[1].trim();
+
+      this.body()
+        .then(buffer => {
+          const bodyString = buffer.toString();
+          const parts = bodyString.split(boundary).slice(1, -1);
+
+          const result: any = {};
+
+          for (const part of parts) {
+            const contentDispositionMatch = part.match(/Content-Disposition: form-data; name="([^"]+)"(?:; filename="([^"]+)")?/);
+
+            if (contentDispositionMatch) {
+              const fieldName = contentDispositionMatch[1];
+              const filename = contentDispositionMatch[2];
+              const valueStart = part.indexOf('\r\n\r\n') + 4;
+              const valueEnd = part.lastIndexOf('\r\n');
+              const value = part.substring(valueStart, valueEnd);
+
+              if (filename) {
+                // TODO: Handle file upload
+              } else {
+                result[fieldName] = value.trim();
+              }
+            }
+          }
+
+          resolve(result as T);
+        })
+        .catch(reject);
+    });
+  }
+
   enhanced.body = function (): Promise<Buffer> {
     const chunks: Buffer[] = [];
     return new Promise((resolve, reject) => {
