@@ -2,36 +2,31 @@
 
 **Zeno** is a zero-dependency, lightweight web framework for TypeScript, designed for maximum simplicity and flexibility. It provides intuitive file-based routing and makes building APIs and web applications straightforward while ensuring high performance.
 
-> **Note**  
-> This project is intended for educational purposes only. It is not production-ready and should not be used in production environments. Use at your own risk, and ensure thorough testing before considering it for production use.
-
 ## Features
 
-- **No External Dependencies**: Built entirely with TypeScript and Node.js standard libraries.
-  
 - **File-Based Routing**: Routes are automatically generated from your folder structure in the `routes/` directory, simplifying route management and code maintenance.
   
-- **Dynamic Routes**: Easily create dynamic routes using template parameters directly in file and folder names, e.g., `api/[model].ts`.
+- **Dynamic Routes**: Easily create dynamic routes using bracket parameters in file and folder names, e.g., `api/[model]/index.ts`.
 
-- **HTTP Method Handlers**: Define specific handlers for different HTTP methods (GET, POST, PUT, DELETE, PATCH) in the same file.
+- **HTTP Method Handlers**: Define specific handlers for different HTTP methods (GET, POST, PUT, DELETE, PATCH) in the same file or use a default export.
 
-- **Performance Optimized**: Designed to be ultra-fast with efficient route handling and a minimal memory footprint.
+- **Multi-Platform Support**: Run on different platforms with the same codebase with built-in adapters for Node.js, Vercel, Netlify, and Bun.
 
-- **Hot Reloading**: Automatically refresh the application when code changes, providing a smooth development experience without manual server restarts.
+- **Middleware System**: Add global, path-specific, or route-specific middleware using `+middleware.ts` files.
 
-- **Middleware Support**: Add route-specific middleware using `+middleware.ts` files that can run before and after requests.
+- **Server-Sent Events (SSE)**: Built-in support for real-time updates with both server and client SSE implementations.
 
-- **Server-Sent Events (SSE)**: Built-in support for real-time updates using SSE.
-
-- **Multi-Platform**: Runs on Node.js, Vercel, or Netlify with the same codebase.
+- **Hot Reloading**: Automatically reload routes when files change during development.
 
 ## Installation
 
-### Prerequisites
+```bash
+npm install we don't have package for now ahah ^^
+```
 
-Zeno requires **Node.js** and **npm** or **yarn** to function. Make sure you have these tools installed before getting started.
+## Getting Started
 
-## Project Structure Example
+### Project Structure
 
 Here's an example folder structure for a Zeno project:
 
@@ -39,48 +34,39 @@ Here's an example folder structure for a Zeno project:
 /project-root
   /routes
     +middleware.ts       # Global middleware
-    hello.ts             # Simple route
+    /hello
+      index.ts           # Simple route
     /api
       +middleware.ts     # API-specific middleware
-      methods.ts         # Route with different HTTP methods
-      [model].ts         # Dynamic route
+      /methods
+        index.ts         # Route with different HTTP methods
+      /[models]
+        index.ts         # Dynamic route
       /models
-        [model].ts       # Nested dynamic route
+        /[model]
+          index.ts       # Nested dynamic route
+      /updates
+        index.ts         # SSE example
+      /sseclient
+        index.ts         # SSE client example
 ```
 
-### Example: Dynamic Route
-
-**routes/api/[model].ts**:
+### Creating a Simple Server
 
 ```typescript
-import { Response, Request } from "zeno";
+import { createServer, getRoutesDir } from "zeno";
 
-export default async function handler(req: Request, res: Response) {
-  const { model } = (req as any).params;  // 'model' corresponds to the [model] in the filename
-  
-  res.json({ message: `Model: ${model}` })
-}
+const routesDir = getRoutesDir(); // or specify your custom route directory
+createServer(routesDir, { 
+  isDev: process.env.NODE_ENV === 'development',
+  port: 3000,
+  platform: 'node' // 'node', 'vercel', 'netlify', or 'bun'
+});
 ```
 
-### Example: HTTP Method Handlers
+### Basic Route Handler
 
-**routes/api/methods.ts**:
-
-```typescript
-import { Response, Request } from "zeno";
-
-export async function GET(req: Request, res: Response) {
-  res.json({ message: "Get all users" });
-}
-
-export async function POST(req: Request, res: Response) {
-  res.json({ message: "Create new user" });
-}
-```
-
-### Example: Simple Route with Enhanced Response
-
-**routes/hello.ts**:
+**routes/hello/index.ts**:
 
 ```typescript
 import type { Request, Response } from "zeno";
@@ -90,64 +76,84 @@ export const GET = async (req: Request, res: Response) => {
 };
 ```
 
-## Starting the Server
+### Route with Multiple HTTP Methods
 
-To start a server with Zeno, use the `createServer` function:
+**routes/api/methods/index.ts**:
 
 ```typescript
-import { createServer, getRoutesDir } from "zeno";
+import type { Request, Response } from "zeno";
 
-const routesDir = getRoutesDir();
-createServer(routesDir);
+export async function GET(req: Request, res: Response) {
+  res.status(200).json({ message: "Get all users" });
+}
+
+export async function POST(req: Request, res: Response) {
+  res.status(201).json({ message: "Create new user" });
+}
+
+export async function PUT(req: Request, res: Response) {
+  res.status(200).json({ message: "Update user" });
+}
+
+export async function DELETE(req: Request, res: Response) {
+  res.status(200).json({ message: "Delete user" });
+}
 ```
 
-## NPM Commands
+### Dynamic Route
 
-### Development Mode
+**routes/api/[models]/index.ts**:
 
-```bash
-npm run dev
+```typescript
+import type { Request, Response } from "zeno";
+
+export default async function handler(req: Request, res: Response) {
+  const { models } = req.params || {};
+  res.status(200).json({ message: `Model: ${models}` });
+}
 ```
 
-Starts a local server in development mode with automatic file reloading.
+### Using Enhanced Request/Response
 
-### Build for Production
+Zeno enhances the standard Node.js request and response objects with additional methods:
 
-```bash
-npm run build
+```typescript
+import type { Request, Response } from "zeno";
+
+export const GET = async (req: Request, res: Response) => {
+  // Enhanced methods available
+  res.status(200).json({ success: true, data: "Hello!" });
+};
 ```
-
-Compiles your code to JavaScript and prepares your project for production.
-
-### Production Mode
-
-```bash
-npm run start
-```
-
-Starts the server in production mode without automatic reloading.
 
 ## Middleware
 
-Middleware functions let you execute code before and after handling a request. Create a `+middleware.ts` file:
+Middleware allows you to execute code before and after request handling. Create a `+middleware.ts` file in any directory:
 
 ```typescript
 import type { Request, Response } from "zeno";
 
 export const beforeRequest = async (req: Request, res: Response) => {
-  console.log(`Request: ${req.method} ${req.url}`);
-  res.setHeader('X-Custom-Header', 'true');
-  return true; // Continue processing
+  console.log(`[API] Request: ${req.method} ${req.url}`);
+  res.setHeader('X-API-Middleware', 'true');
+  return true; // Continue processing request
 };
 
 export const afterRequest = async (req: Request, res: Response) => {
-  console.log(`Response sent with status: ${res.statusCode}`);
+  console.log(`[API] Response sent with status: ${res.statusCode}`);
+};
+
+// Optional error handler
+export const onError = async (req: Request, res: Response, context: any) => {
+  console.error(`Error occurred:`, context.error);
 };
 ```
 
 ## Server-Sent Events (SSE)
 
-Zeno includes built-in support for SSE:
+Zeno provides built-in support for Server-Sent Events:
+
+### Server Side
 
 ```typescript
 import type { Request, Response } from "zeno";
@@ -155,13 +161,148 @@ import type { Request, Response } from "zeno";
 export async function GET(req: Request, res: Response) {
   res.initSSE();
   
+  console.log("Sending regular updates");
   res.sseSend({ status: "connected" });
-  res.sseEvent("userUpdate", { id: 1, name: "John" });
   
-  // Close the connection after sending events
+  res.sseEvent("userUpdate", { id: 1, name: "John" });
   res.sseClose();
 }
 ```
+
+### Client Side
+
+```typescript
+import { createSSEClient } from "zeno";
+import type { Request, Response } from "zeno";
+
+export async function GET(req: Request, res: Response) {
+  const client = createSSEClient("http://localhost:3000/api/updates");
+  res.initSSE();
+
+  const sseClient = await client;
+  await sseClient
+    .onMessage(data => {
+      res.sseSend(data);
+    })
+    .onEvent("userUpdate", data => {
+      res.sseEvent("userUpdate", data);
+    })
+    .onClose(() => {
+      res.sseClose();
+    });
+}
+```
+
+## Configuration Options
+
+Zeno's `createServer` function accepts a configuration object with the following options:
+
+```typescript
+createServer(routesDir, {
+  // Basic settings
+  isDev: true,                 // Enable development mode features
+  port: 3000,                  // Server port
+  platform: 'node',            // 'node', 'vercel', 'netlify', or 'bun'
+  timeout: 30000,              // Request timeout in ms
+  
+  // HTTPS Support
+  httpsOptions: {
+    cert: fs.readFileSync('path/to/cert.pem'),
+    key: fs.readFileSync('path/to/key.pem')
+  },
+  
+  // Default headers for all responses
+  defaultHeaders: {
+    'Access-Control-Allow-Origin': '*',
+    'X-Powered-By': 'Zeno'
+  },
+  
+  // Clustering configuration
+  cluster: {
+    enabled: true,
+    workers: 4,                // Number of workers (defaults to CPU count)
+    loadBalancing: 'least-connections' // 'round-robin', 'least-connections', 'least-cpu', 'fastest-response'
+  },
+  
+  // Performance monitoring
+  monitoring: {
+    enabled: true,
+    sampleInterval: 5000,      // How often to sample metrics (ms)
+    reportInterval: 60000,     // How often to log metrics (ms)
+    thresholds: {
+      cpu: 80,                 // Alert on CPU usage above 80%
+      memory: 80,              // Alert on memory usage above 80%
+      responseTime: 1000,      // Alert on avg response time above 1000ms
+      errorRate: 5             // Alert on error rate above 5%
+    }
+  }
+});
+```
+
+## Platform Specific Code
+
+Zeno supports different platforms through platform-specific adapters:
+
+```typescript
+import { createServer, getRoutesDir } from "zeno";
+
+// For Node.js
+createServer(getRoutesDir(), { platform: 'node' });
+
+// For Vercel
+export default createServer(getRoutesDir(), { platform: 'vercel' });
+
+// For Netlify
+export const handler = createServer(getRoutesDir(), { platform: 'netlify' });
+
+// For Bun
+createServer(getRoutesDir(), { platform: 'bun' });
+```
+
+## Advanced Features
+
+### Graceful Shutdown
+
+Zeno provides graceful shutdown capabilities that ensure active connections can complete before the server stops:
+
+```typescript
+import { createServer, getRoutesDir } from "zeno";
+import { setupGracefulShutdown } from "zeno";
+
+const server = createServer(getRoutesDir());
+
+// Additional shutdown options
+setupGracefulShutdown(server, {
+  timeout: 30000,
+  signals: ['SIGTERM', 'SIGINT'],
+  beforeShutdown: async () => {
+    console.log('Performing pre-shutdown tasks...');
+  },
+  onShutdown: async () => {
+    console.log('Performing post-shutdown cleanup...');
+  }
+});
+```
+
+### Performance Monitoring
+
+Access performance metrics through the `/health` endpoint when monitoring is enabled:
+
+```typescript
+createServer(getRoutesDir(), {
+  monitoring: {
+    enabled: true,
+    // Additional options...
+  }
+});
+```
+
+This will provide detailed stats on:
+- Request counts and rates
+- Response times (avg, min, max, p50, p90, p99)
+- Memory and CPU usage
+- Error rates
+- Status code distribution
 
 ## License
 
@@ -169,18 +310,4 @@ Zeno is under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-## Architecture Explanation
-
-- **Dynamic Routes**: Files in the `routes/` directory are treated as routes. If a file uses the `[param]` syntax in its name (like `api/[model].ts`), it's processed as a dynamic route where `model` becomes a request parameter. For example, a request to `/api/user` will match the file `api/[model].ts`, and you can retrieve the value of `model` as `req.params.model`.
-
-- **Static Routes**: Files like `api/methods.ts` are processed as static routes and are directly accessible at the URL `/api/methods`.
-
-### Advantages of Zeno
-- **Simplicity**: Easy to set up and use with an intuitive file structure.
-- **Flexibility**: Allows you to create APIs and web applications in a modular way.
-- **Performance**: Designed to operate with low latency and optimized route handling.
-- **Zero Dependencies**: Built entirely on Node.js standard libraries with no external packages required.
-
----
-
-✨ **Fun fact**: The project name comes from the philosopher Zeno and the Dragon Ball character Zeno. Useless information, do with it what you will!
+✨ **Fun fact**: The project name comes from the philosopher Zenon and the Dragon Ball character Zeno. Useless information, do with it what you will!
