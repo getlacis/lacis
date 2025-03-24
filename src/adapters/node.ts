@@ -138,6 +138,7 @@ export const nodeAdapter: Adapter = {
               }
               
               if (!route) {
+                await runMiddlewares("onError", enhancedReq, enhancedRes);
                 enhancedRes.status(404).json({ error: "Route not found" });
                 requestTracker?.end(404);
                 return;
@@ -173,7 +174,8 @@ export const nodeAdapter: Adapter = {
               if (!enhancedRes.headersSent) {
                 enhancedRes.status(500).json({ error: "Internal Server Error" });
               }
-              
+
+              await runMiddlewares("onError", enhancedReq, enhancedRes);
               requestTracker?.end(enhancedRes.statusCode || 500, true);
             }
           };
