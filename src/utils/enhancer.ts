@@ -8,6 +8,7 @@ import {
   sseRetry,
   sseClose,
   sseEventError,
+  sendJson,
 } from "@/sse/server";
 import { createSSEClient } from "@/sse/client";
 import type {
@@ -119,8 +120,12 @@ function enhanceResponse(res: ServerResponse): Response {
     initSSE(this, options);
   };
 
-  enhanced.sseSend = function (data: any) {
+  enhanced.sseSend = function (data: string) {
     send(this, data);
+  };
+
+  enhanced.sseJson = function (data: any) {
+    sendJson(this, JSON.stringify(data));
   };
 
   enhanced.sseEvent = function (event: string, data: any) {

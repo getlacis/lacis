@@ -26,7 +26,8 @@ interface Response extends ServerResponse {
   send(data: any): void;
   status(code: number): Response;
   initSSE(options?: SSEOptions): void;
-  sseSend(data: any): void;
+  sseSend(data: string): void;
+  sseJson(data: any): void;
   sseEvent(event: string, data: any): void;
   sseComment(comment: string): void;
   sseId(id: string): void;
