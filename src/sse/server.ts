@@ -27,6 +27,10 @@ export function initSSE(res: ServerResponse, options?: SSEOptions) {
 }
 
 export function send(res: ServerResponse, data: any) {
+  res.write(`data: ${data}\n\n`);
+}
+
+export function sendJson(res: ServerResponse, data: any) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
@@ -49,7 +53,7 @@ export function sseRetry(res: ServerResponse, ms: number) {
 
 export function sseClose(
   res: ServerResponse,
-  comment: string = "Fin de la connexion SSE"
+  comment: string = "Connection closed"
 ) {
   res.write(`: ${comment}\n\n`);
   res.end();
