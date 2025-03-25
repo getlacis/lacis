@@ -435,7 +435,7 @@ class Router {
             const module = await import(`${absolutePath}?update=${Date.now()}`);
             
             const handlers: RouteHandlers = {};
-            const methods = ["GET", "POST", "PUT", "DELETE", "PATCH"];
+            const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
             
             methods.forEach(method => {
               if (typeof module[method] === "function") {
