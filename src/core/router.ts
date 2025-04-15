@@ -45,11 +45,6 @@ type FindRouteResult =
 
 interface RouteNode {
   handlers: Record<string, Function[]>;
-  middleware: {
-    beforeRequest: Function[];
-    afterRequest: Function[];
-    onError: Function[];
-  };
   staticChildren: Map<string, RouteNode>;
   paramChild: {
     name: string;
@@ -78,11 +73,6 @@ class Router {
   private createNode(): RouteNode {
     return {
       handlers: {},
-      middleware: {
-        beforeRequest: [],
-        afterRequest: [],
-        onError: []
-      },
       staticChildren: new Map(),
       paramChild: null,
       wildcardHandler: null,
@@ -134,36 +124,6 @@ class Router {
     this.routeCount++;
     
     this.cachedRoutes.clear();
-    
-    return this;
-  }
-  
-  addMiddleware(routePath: string, type: 'beforeRequest' | 'afterRequest' | 'onError', handler: Function): Router {
-    const segments = routePath.split('/').filter(Boolean);
-    let currentNode = this.rootNode;
-    
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const parsed = parsePattern(segment);
-      
-      if (parsed.isParam) {
-        if (!currentNode.paramChild) {
-          currentNode.paramChild = {
-            name: parsed.name,
-            node: this.createNode(),
-            isOptional: parsed.isOptional
-          };
-        }
-        currentNode = currentNode.paramChild.node;
-      } else {
-        if (!currentNode.staticChildren.has(segment)) {
-          currentNode.staticChildren.set(segment, this.createNode());
-        }
-        currentNode = currentNode.staticChildren.get(segment)!;
-      }
-    }
-    
-    currentNode.middleware[type].push(handler);
     
     return this;
   }
@@ -348,63 +308,6 @@ class Router {
     return null;
   }
   
-  collectMiddleware(url: string) {
-    const normalizedUrl = url === '/' ? '/' : url.replace(/\/+$/, '');
-    const segments = normalizedUrl.split('/').filter(Boolean);
-    
-    const middleware = {
-      beforeRequest: [] as Function[],
-      afterRequest: [] as Function[],
-      onError: [] as Function[]
-    };
-    
-    this.collectMiddlewareRecursive(this.rootNode, segments, middleware);
-    
-    return middleware;
-  }
-  
-  private collectMiddlewareRecursive(
-    node: RouteNode,
-    segments: string[],
-    middleware: { 
-      beforeRequest: Function[], 
-      afterRequest: Function[], 
-      onError: Function[] 
-    },
-    index: number = 0,
-    currentPath: string[] = []
-  ) {
-    middleware.beforeRequest.push(...node.middleware.beforeRequest);
-    middleware.afterRequest.push(...node.middleware.afterRequest);
-    middleware.onError.push(...node.middleware.onError);
-    
-    if (index === segments.length) {
-      return;
-    }
-    
-    const segment = segments[index];
-    
-    if (node.staticChildren.has(segment)) {
-      this.collectMiddlewareRecursive(
-        node.staticChildren.get(segment)!,
-        segments,
-        middleware,
-        index + 1,
-        [...currentPath, segment]
-      );
-    }
-    
-    if (node.paramChild) {
-      this.collectMiddlewareRecursive(
-        node.paramChild.node,
-        segments,
-        middleware,
-        index + 1,
-        [...currentPath, `[${node.paramChild.name}]`]
-      );
-    }
-  }
-  
   async loadRoutes(routesDir: string): Promise<boolean> {
     this.rootNode = this.createNode();
     this.cachedRoutes.clear();
@@ -435,7 +338,7 @@ class Router {
             const module = await import(`${absolutePath}?update=${Date.now()}`);
             
             const handlers: RouteHandlers = {};
-            const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
+            const methods = ["GET", "POST", "PUT", "DELETE", "PATCH"];
             
             methods.forEach(method => {
               if (typeof module[method] === "function") {

@@ -1,7 +1,6 @@
 import { getAdapter } from '@/adapters';
 import { defaultConfig, type ServerConfig } from "@/config/serverConfig";
 import { loadRoutes } from './router';
-import { watchRoutes, stopWatching } from './watcher';
 import type { Server } from 'http';
 import { primaryLog } from '@/utils/logs';
 import cluster from 'cluster';
@@ -25,8 +24,6 @@ async function createServer(
     }
     
     if (config.isDev) {
-      watchRoutes(routesDir, verbose);
-      
       if (verbose) {
         primaryLog("🔥 Mode de développement activé");
       }
@@ -71,9 +68,7 @@ function setupGracefulShutdown() {
     isShuttingDown = true;
     
     primaryLog(`\nSignal ${signal} reçu, arrêt en cours...`);
-    
-    stopWatching();
-    
+        
     if (serverInstance && typeof serverInstance.close === 'function') {
       await new Promise<void>((resolve) => {
         serverInstance!.close(() => resolve());

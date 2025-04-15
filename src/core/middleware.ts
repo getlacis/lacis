@@ -18,12 +18,7 @@ const globalMiddlewares: {
   onError: [],
 };
 
-const pathMiddlewares = new Map<string, {
-  beforeRequest: MiddlewareCallback[];
-  afterRequest: MiddlewareCallback[];
-  onError: MiddlewareCallback[];
-}>();
-
+const pathMiddlewares: PathMiddlewares = new Map();
 
 function addMiddleware(
   middlewareName: MiddlewareType,
@@ -41,27 +36,91 @@ function addMiddleware(
   };
 }
 
+function addPathMiddleware(
+  path: string,
+  type: MiddlewareType,
+  callback: MiddlewareCallback
+) {
+  const normalizedPath = path === '/' ? '/' : path.replace(/\/+$/, '');
+  
+  if (!pathMiddlewares.has(normalizedPath)) {
+    pathMiddlewares.set(normalizedPath, {
+      beforeRequest: [],
+      afterRequest: [],
+      onError: []
+    });
+  }
+  
+  const middlewares = pathMiddlewares.get(normalizedPath)!;
+  middlewares[type].push(callback);
+  
+  return {
+    remove: () => {
+      if (pathMiddlewares.has(normalizedPath)) {
+        const middlewares = pathMiddlewares.get(normalizedPath)!;
+        const index = middlewares[type].indexOf(callback);
+        if (index !== -1) {
+          middlewares[type].splice(index, 1);
+        }
+      }
+    }
+  };
+}
+
+function collectMiddleware(url: string) {
+  const normalizedUrl = url === '/' ? '/' : url.replace(/\/+$/, '');
+  const segments = normalizedUrl.split('/').filter(Boolean);
+  
+  const result = {
+    beforeRequest: [...globalMiddlewares.beforeRequest],
+    afterRequest: [...globalMiddlewares.afterRequest],
+    onError: [...globalMiddlewares.onError]
+  };
+  
+  let currentPath = '';
+  
+  if (pathMiddlewares.has('/')) {
+    const rootMiddleware = pathMiddlewares.get('/')!;
+    result.beforeRequest.push(...rootMiddleware.beforeRequest);
+    result.afterRequest.push(...rootMiddleware.afterRequest);
+    result.onError.push(...rootMiddleware.onError);
+  }
+  
+  for (const segment of segments) {
+    currentPath += '/' + segment;
+    
+    if (pathMiddlewares.has(currentPath)) {
+      const middleware = pathMiddlewares.get(currentPath)!;
+      result.beforeRequest.push(...middleware.beforeRequest);
+      result.afterRequest.push(...middleware.afterRequest);
+      result.onError.push(...middleware.onError);
+    }
+  }
+  
+  return result;
+}
+
 async function runMiddlewares(
   middlewareName: MiddlewareType,
   req: Request,
   res: Response,
   context?: any
 ): Promise<boolean> {
-  const hasGlobalMiddlewares = globalMiddlewares[middlewareName].length > 0;
-  const hasPathMiddlewares = pathMiddlewares.size > 0;
+  const url = req.url?.split('?')[0] || '/';
+  const middleware = collectMiddleware(url);
   
-  if (!hasGlobalMiddlewares && !hasPathMiddlewares) {
+  if (middleware[middlewareName].length === 0) {
     return true;
   }
   
-  for (const middleware of globalMiddlewares[middlewareName]) {
+  for (const handler of middleware[middlewareName]) {
     try {
-      const result = await middleware(req, res, context);
+      const result = await handler(req, res, context);
       if (result === false) return false;
     } catch (error) {
       if (middlewareName !== "onError") {
         try {
-          for (const errorHandler of globalMiddlewares.onError) {
+          for (const errorHandler of middleware.onError) {
             await errorHandler(req, res, { error, phase: middlewareName });
           }
         } catch (e) {
@@ -69,34 +128,6 @@ async function runMiddlewares(
         }
       }
       return false;
-    }
-  }
-
-  if (pathMiddlewares.size === 0) {
-    return true;
-  }
-  
-  const urlPath = req.url?.split('?')[0] || '/';
-  
-  for (const [middlewarePath, middlewares] of pathMiddlewares.entries()) {
-    if (urlPath === middlewarePath || 
-        (middlewarePath !== '/' && urlPath.startsWith(middlewarePath))) {
-      
-      if (middlewares[middlewareName].length === 0) continue;
-      
-      for (const middleware of middlewares[middlewareName]) {
-        try {
-          const result = await middleware(req, res, context);
-          if (result === false) return false;
-        } catch (error) {
-          if (middlewareName !== "onError") {
-            for (const errorHandler of middlewares.onError) {
-              await errorHandler(req, res, { error, phase: middlewareName });
-            }
-          }
-          return false;
-        }
-      }
     }
   }
 
@@ -173,4 +204,15 @@ async function loadMiddlewares(routesDir: string) {
   await scanDir(routesDir, "/");
 }
 
-export { addMiddleware, runMiddlewares, loadMiddlewares };
+function getPathMiddlewares() {
+  return pathMiddlewares;
+}
+
+export { 
+  addMiddleware, 
+  addPathMiddleware,
+  runMiddlewares, 
+  loadMiddlewares, 
+  getPathMiddlewares, 
+  collectMiddleware 
+};
