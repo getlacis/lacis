@@ -4,7 +4,7 @@ import type { ServerConfig } from "@/types";
 const defaultConfig: ServerConfig = {
   port: 3000,
   isDev: process.env.NODE_ENV === "development",
-  timeout: 300000,
+  timeout: 30000,
   cluster: {
     enabled: true,
     workers: undefined
