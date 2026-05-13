@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.test.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@/*": ["../src/*"],
+      "@core/*": ["../src/core/*"]
+    }
+  },
+  "exclude": ["../node_modules"],
+  "include": ["../src", "."]
+}
