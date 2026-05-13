@@ -211,6 +211,21 @@ function resetMiddlewares() {
   pathMiddlewares.clear();
 }
 
+function registerMiddlewareConfig(config?: {
+  beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
+  afterRequest?: MiddlewareCallback | MiddlewareCallback[];
+  onError?: MiddlewareCallback | MiddlewareCallback[];
+}) {
+  if (!config) return;
+  for (const type of ["beforeRequest", "afterRequest", "onError"] as const) {
+    const handlers = config[type];
+    if (handlers) {
+      const arr = Array.isArray(handlers) ? handlers : [handlers];
+      for (const h of arr) addMiddleware(type, h);
+    }
+  }
+}
+
 export {
   addMiddleware,
   addPathMiddleware,
@@ -219,4 +234,5 @@ export {
   getPathMiddlewares,
   collectMiddleware,
   resetMiddlewares,
+  registerMiddlewareConfig,
 };

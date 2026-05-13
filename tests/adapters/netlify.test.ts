@@ -4,7 +4,7 @@ const mockRegisterRoutes = jest.fn();
 const mockFindRoute = jest.fn();
 const mockIsRouteError = jest.fn((obj: any) => "error" in obj);
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
-const mockAddMiddleware = jest.fn();
+const mockRegisterMiddlewareConfig = jest.fn();
 
 jest.mock("@/core/router", () => ({
   registerRoutes: (...args: any[]) => mockRegisterRoutes(...args),
@@ -13,8 +13,8 @@ jest.mock("@/core/router", () => ({
 }));
 
 jest.mock("@/core/middleware", () => ({
-  addMiddleware: (...args: any[]) => mockAddMiddleware(...args),
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
+  registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
 }));
 
 import { netlifyAdapter } from "@/adapters/netlify";
@@ -205,10 +205,9 @@ describe("netlifyAdapter handler", () => {
     expect(routeHandler).not.toHaveBeenCalled();
   });
 
-  it("registers config middleware via addMiddleware", async () => {
+  it("registers config middleware via registerMiddlewareConfig", async () => {
     const beforeFn = jest.fn();
     const routes = [{ path: "/users", handlers: {} }];
-    // Call createHandler to trigger init
     const handler = netlifyAdapter.createHandler({
       routes,
       middleware: { beforeRequest: beforeFn },
@@ -217,7 +216,7 @@ describe("netlifyAdapter handler", () => {
 
     await handler(event(), {});
 
-    expect(mockAddMiddleware).toHaveBeenCalledWith("beforeRequest", beforeFn);
+    expect(mockRegisterMiddlewareConfig).toHaveBeenCalledWith({ beforeRequest: beforeFn });
   });
 
   it("returns 500 when the route handler throws", async () => {
@@ -247,5 +246,45 @@ describe("netlifyAdapter handler", () => {
     const result = await handler(event(), {});
 
     expect(result.headers?.["x-custom"]).toBe("value");
+  });
+
+  it("calls afterRequest middleware after the route handler", async () => {
+    const handler = netlifyAdapter.createHandler({ routes: [] }) as Function;
+    const order: string[] = [];
+
+    mockFindRoute.mockReturnValue({
+      handler: async (_req: any, res: any) => {
+        order.push("handler");
+        res.status(200).json({ ok: true });
+      },
+      params: {},
+    });
+    mockRunMiddlewares.mockImplementation(async (type: string) => {
+      order.push(type);
+      return true;
+    });
+
+    await handler(event(), {});
+
+    expect(order.indexOf("beforeRequest")).toBeLessThan(order.indexOf("handler"));
+    expect(order.indexOf("handler")).toBeLessThan(order.indexOf("afterRequest"));
+  });
+
+  it("calls onError middleware when route handler throws", async () => {
+    const handler = netlifyAdapter.createHandler({ routes: [] }) as Function;
+    mockFindRoute.mockReturnValue({
+      handler: async () => { throw new Error("fail"); },
+      params: {},
+    });
+
+    const result = await handler(event(), {});
+
+    expect(result.statusCode).toBe(500);
+    expect(mockRunMiddlewares).toHaveBeenCalledWith(
+      "onError",
+      expect.anything(),
+      expect.anything(),
+      { error: expect.any(Error) }
+    );
   });
 });

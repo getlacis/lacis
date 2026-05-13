@@ -2,7 +2,7 @@ import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import type { Server } from "bun";
 import { loadRoutes, findRoute } from "@/core/router";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { runMiddlewares } from "@/core/middleware";
+import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
 import { primaryLog } from "@/utils/logs";
 import { EventEmitter } from "events";
 
@@ -30,6 +30,7 @@ export const bunAdapter: Adapter = {
       primaryLog("🚀 Bun high-performance mode enabled");
 
       await loadRoutes(routesDir);
+      registerMiddlewareConfig(config.middleware);
 
       const defaultHeadersEntries = defaultHeaders
         ? Object.entries(defaultHeaders)

@@ -7,7 +7,7 @@ const mockRegisterRoutes = jest.fn();
 const mockFindRoute = jest.fn();
 const mockIsRouteError = jest.fn((obj: any) => 'error' in obj);
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
-const mockAddMiddleware = jest.fn();
+const mockRegisterMiddlewareConfig = jest.fn();
 
 jest.mock('@/core/router', () => ({
   registerRoutes: (...args: any[]) => mockRegisterRoutes(...args),
@@ -16,8 +16,8 @@ jest.mock('@/core/router', () => ({
 }));
 
 jest.mock('@/core/middleware', () => ({
-  addMiddleware: (...args: any[]) => mockAddMiddleware(...args),
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
+  registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
 }));
 
 import { vercelAdapter } from '@/adapters/vercel';
@@ -157,7 +157,7 @@ describe('vercelAdapter handler', () => {
     expect(routeHandler).not.toHaveBeenCalled();
   });
 
-  it('registers config middleware via addMiddleware', async () => {
+  it('registers config middleware via registerMiddlewareConfig', async () => {
     const afterFn = jest.fn();
     const routes = [{ path: '/users', handlers: {} }];
     const handler = vercelAdapter.createHandler({ routes, middleware: { afterRequest: afterFn } }) as Function;
@@ -166,7 +166,7 @@ describe('vercelAdapter handler', () => {
     const { res } = makeVercelRes();
     await handler(makeVercelReq(), res);
 
-    expect(mockAddMiddleware).toHaveBeenCalledWith('afterRequest', afterFn);
+    expect(mockRegisterMiddlewareConfig).toHaveBeenCalledWith({ afterRequest: afterFn });
   });
 
   it('returns 500 when the route handler throws', async () => {
@@ -193,7 +193,48 @@ describe('vercelAdapter handler', () => {
     const { res } = makeVercelRes();
     await handler(makeVercelReq(), res);
 
-    expect(mockAddMiddleware).toHaveBeenCalledWith('beforeRequest', fn1);
-    expect(mockAddMiddleware).toHaveBeenCalledWith('beforeRequest', fn2);
+    expect(mockRegisterMiddlewareConfig).toHaveBeenCalledWith({ beforeRequest: [fn1, fn2] });
+  });
+
+  it('calls afterRequest middleware after the route handler', async () => {
+    const handler = vercelAdapter.createHandler({ routes: [] }) as Function;
+    const order: string[] = [];
+
+    mockFindRoute.mockReturnValue({
+      handler: async (_req: any, res: any) => {
+        order.push('handler');
+        res.status(200).json({ ok: true });
+      },
+      params: {},
+    });
+    mockRunMiddlewares.mockImplementation(async (type: string) => {
+      order.push(type);
+      return true;
+    });
+
+    const { res } = makeVercelRes();
+    await handler(makeVercelReq(), res);
+
+    expect(order.indexOf('beforeRequest')).toBeLessThan(order.indexOf('handler'));
+    expect(order.indexOf('handler')).toBeLessThan(order.indexOf('afterRequest'));
+  });
+
+  it('calls onError middleware when route handler throws', async () => {
+    const handler = vercelAdapter.createHandler({ routes: [] }) as Function;
+    mockFindRoute.mockReturnValue({
+      handler: async () => { throw new Error('fail'); },
+      params: {},
+    });
+
+    const { res, statusCode } = makeVercelRes();
+    await handler(makeVercelReq(), res);
+
+    expect(statusCode()).toBe(500);
+    expect(mockRunMiddlewares).toHaveBeenCalledWith(
+      'onError',
+      expect.anything(),
+      expect.anything(),
+      { error: expect.any(Error) }
+    );
   });
 });

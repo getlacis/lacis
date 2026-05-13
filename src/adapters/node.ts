@@ -5,12 +5,9 @@ import os from "os";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import { loadRoutes, findRoute } from "@/core/router";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { runMiddlewares } from "@/core/middleware";
+import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
 import { primaryLog } from "@/utils/logs";
 import { getMonitor } from "@/utils/monitor";
-
-const routeCache = new Map();
-const MAX_ROUTE_CACHE = 1000;
 
 export const nodeAdapter: Adapter = {
   name: "node",
@@ -18,6 +15,9 @@ export const nodeAdapter: Adapter = {
     if (typeof config !== "string") {
       throw new Error("nodeAdapter requires a routesDir string, not a ServerlessConfig.");
     }
+
+    const routeCache = new Map();
+    const MAX_ROUTE_CACHE = 1000;
     const routesDir = config;
     const transformRequest = nodeAdapter.transformRequest!;
     const transformResponse = nodeAdapter.transformResponse!;
@@ -100,6 +100,7 @@ export const nodeAdapter: Adapter = {
 
       if (cluster.isWorker || !clusterConfig?.enabled) {
         await loadRoutes(routesDir);
+        registerMiddlewareConfig(config.middleware);
 
         const requestListener = (
           req: http.IncomingMessage,

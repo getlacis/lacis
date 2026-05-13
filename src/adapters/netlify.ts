@@ -1,6 +1,6 @@
 import type { Adapter, ServerlessConfig, NetlifyEvent, NetlifyContext } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
-import { addMiddleware, runMiddlewares } from "@/core/middleware";
+import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
 import { IncomingMessage, ServerResponse } from "http";
 import { Socket } from "net";
@@ -21,15 +21,7 @@ export const netlifyAdapter: Adapter = {
       if (initPromise) return initPromise;
       initPromise = (async () => {
         registerRoutes(config.routes);
-        if (config.middleware) {
-          for (const type of ["beforeRequest", "afterRequest", "onError"] as const) {
-            const handlers = config.middleware[type];
-            if (handlers) {
-              const arr = Array.isArray(handlers) ? handlers : [handlers];
-              for (const h of arr) addMiddleware(type, h);
-            }
-          }
-        }
+        registerMiddlewareConfig(config.middleware);
       })();
       return initPromise;
     };

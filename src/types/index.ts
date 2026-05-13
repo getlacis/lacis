@@ -49,10 +49,10 @@ interface ServerConfig {
     stickySessions?: boolean;
   };
   defaultHeaders?: Record<string, string>;
-  globalMiddlewares?: {
-    beforeRequest?: MiddlewareCallback;
-    afterRequest?: MiddlewareCallback;
-    onError?: MiddlewareCallback;
+  middleware?: {
+    beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
+    afterRequest?: MiddlewareCallback | MiddlewareCallback[];
+    onError?: MiddlewareCallback | MiddlewareCallback[];
   };
   
   monitoring?: {
