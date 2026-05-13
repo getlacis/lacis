@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, Request, Response } from ".";
+import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, Request, Response, RouteHandlers } from ".";
+import type { MiddlewareCallback } from "./middleware";
 
 interface AdapterRequest extends IncomingMessage {
   params?: Record<string, string>;
@@ -21,9 +22,23 @@ interface AdapterContext {
   route?: Route;
 }
 
+interface ServerlessRoute {
+  path: string;
+  handlers: RouteHandlers;
+}
+
+interface ServerlessConfig {
+  routes: ServerlessRoute[];
+  middleware?: {
+    beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
+    afterRequest?: MiddlewareCallback | MiddlewareCallback[];
+    onError?: MiddlewareCallback | MiddlewareCallback[];
+  };
+}
+
 interface Adapter {
   name: string;
-  createHandler: (routesDir: string) => unknown;
+  createHandler: (config: string | ServerlessConfig) => unknown;
   transformRequest?: (req: any) => Request;
   transformResponse?: (res: any) => Response;
 }
@@ -33,4 +48,6 @@ export type {
   AdapterContext,
   AdapterRequest,
   AdapterResponse,
+  ServerlessRoute,
+  ServerlessConfig,
 };

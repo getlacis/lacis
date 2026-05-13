@@ -78,7 +78,6 @@ export * from "./sse";
 export * from "./adapter";
 export * from "./platform";
 export * from "./enhancer";
-export * from "./platform";
 export * from "./middleware";
 export * from "./monitor";
 export * from "./loadBalancer";
