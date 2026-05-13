@@ -4,6 +4,8 @@ import { vercelAdapter } from './vercel';
 import { netlifyAdapter } from './netlify';
 import { bunAdapter } from './bun';
 
+export { nodeAdapter, vercelAdapter, netlifyAdapter, bunAdapter };
+
 const adapters: Record<string, Adapter> = {
   node: nodeAdapter,
   vercel: vercelAdapter,

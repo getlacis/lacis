@@ -2,7 +2,7 @@ import http from "http";
 import https from "https";
 import cluster from "cluster";
 import os from "os";
-import type { Adapter, ServerConfig } from "@/types";
+import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import { loadRoutes, findRoute } from "@/core/router";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
 import { runMiddlewares } from "@/core/middleware";
@@ -14,7 +14,11 @@ const MAX_ROUTE_CACHE = 1000;
 
 export const nodeAdapter: Adapter = {
   name: "node",
-  createHandler: (routesDir: string) => {
+  createHandler: (config: string | ServerlessConfig) => {
+    if (typeof config !== "string") {
+      throw new Error("nodeAdapter requires a routesDir string, not a ServerlessConfig.");
+    }
+    const routesDir = config;
     const transformRequest = nodeAdapter.transformRequest!;
     const transformResponse = nodeAdapter.transformResponse!;
 
