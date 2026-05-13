@@ -29,6 +29,7 @@
     "examples",
     "dist",
     "tests",
-    "jest.config.cjs"
+    "jest.config.cjs",
+    "src/cli/templates"
   ]
 }
