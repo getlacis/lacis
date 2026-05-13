@@ -1,5 +1,5 @@
 import type { Adapter, ServerConfig } from "@/types";
-import { type Server } from "bun";
+import type { Server } from "bun";
 import { loadRoutes, findRoute } from "@/core/router";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
 import { runMiddlewares } from "@/core/middleware";
@@ -163,14 +163,10 @@ export const bunAdapter: Adapter = {
             if (!route) {
               route = findRoute(url.pathname, request.method);
               if (route) {
-                routeCache.set(cacheKey, route);
-                if (routeCache.size > MAX_ROUTE_CACHE) {
-                  const keysToDelete = Array.from(routeCache.keys()).slice(
-                    0,
-                    MAX_ROUTE_CACHE / 10
-                  );
-                  for (const key of keysToDelete) routeCache.delete(key);
+                if (routeCache.size >= MAX_ROUTE_CACHE) {
+                  routeCache.delete(routeCache.keys().next().value!);
                 }
+                routeCache.set(cacheKey, route);
               }
             }
 

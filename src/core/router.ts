@@ -157,12 +157,10 @@ class Router {
     }
     
     if (result) {
-      this.cachedRoutes.set(cacheKey, result);
-      
-      if (this.cachedRoutes.size > 1000) {
-        const keysToDelete = Array.from(this.cachedRoutes.keys()).slice(0, 100);
-        keysToDelete.forEach(key => this.cachedRoutes.delete(key));
+      if (this.cachedRoutes.size >= 1000) {
+        this.cachedRoutes.delete(this.cachedRoutes.keys().next().value!);
       }
+      this.cachedRoutes.set(cacheKey, result);
     }
     
     return result || { handlers: [], params: {} };
@@ -330,11 +328,6 @@ class Router {
           try {
             const fullPath = path.join(dir, indexFile.name);
             const absolutePath = path.resolve(fullPath);
-            
-            if (require.cache[require.resolve(absolutePath)]) {
-              delete require.cache[require.resolve(absolutePath)];
-            }
-            
             const module = await import(`${absolutePath}?update=${Date.now()}`);
             
             const handlers: RouteHandlers = {};
