@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+
+[functions]
+  directory = "examples/netlify/netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/index"
+  status = 200
+  force = true

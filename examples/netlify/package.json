@@ -1,0 +1,13 @@
+{
+  "name": "zeno-example-netlify",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node ../../dist/cli/index.js build",
+    "dev": "node ../../dist/cli/index.js dev"
+  },
+  "dependencies": {
+    "zeno": "file:../../"
+  }
+}
