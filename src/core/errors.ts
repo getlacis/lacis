@@ -247,7 +247,7 @@ function normalizeError(error: any): HttpError {
   if (
     error &&
     typeof error === "object" &&
-    "code" in error &&
+    typeof error.code === "number" &&
     "message" in error
   ) {
     return error as HttpError;
@@ -280,13 +280,13 @@ function normalizeError(error: any): HttpError {
 }
 
 function isHttpError(error: any): error is HttpError {
-  return (
+  return !!(
     error &&
     typeof error === "object" &&
-    "code" in error &&
+    typeof error.code === "number" &&
     "message" in error &&
     "name" in error
   );
 }
 
-export { HTTP_STATUS, isHttpError, normalizeError, sendError, logError, createBadRequestError, createUnauthorizedError, createForbiddenError, createNotFoundError, createMethodNotAllowedError, createConflictError, createValidationError, createRateLimitError, createInternalServerError, createServiceUnavailableError, createGatewayTimeoutError };
+export { HTTP_STATUS, createHttpError, isHttpError, normalizeError, sendError, logError, createBadRequestError, createUnauthorizedError, createForbiddenError, createNotFoundError, createMethodNotAllowedError, createConflictError, createValidationError, createRateLimitError, createInternalServerError, createServiceUnavailableError, createGatewayTimeoutError };
