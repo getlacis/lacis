@@ -1,20 +1,19 @@
-import { createSSEClient } from "@/sse/client";
-import { initSSE, send, sendEvent, sseClose } from "@/sse/server";
-import type { IncomingMessage, ServerResponse } from "http";
+import { createSSEClient } from 'zeno';
+import type { Request, Response } from 'zeno';
 
-export async function GET(req: IncomingMessage, res: ServerResponse) {
-  const client = createSSEClient("http://localhost:3000/api/updates");
-  initSSE(res);
+export async function GET(_req: Request, res: Response) {
+  res.initSSE();
 
-  const sseClient = await client;
-  await sseClient
+  const client = await createSSEClient("http://localhost:3000/api/updates");
+
+  client
     .onMessage(data => {
-      send(res, data);
+      res.sseSend(data);
     })
     .onEvent("userUpdate", data => {
-      sendEvent(res, "userUpdate", data);
+      res.sseEvent("userUpdate", data);
     })
     .onClose(() => {
-      sseClose(res);
+      res.sseClose();
     });
 }

@@ -1,14 +1,11 @@
-import type { Request, Response } from "@/types";
-import { initSSE, send, sendEvent, sseClose } from "../../../src/sse/server";
-import type { IncomingMessage, ServerResponse } from "http";
+import type { Request, Response } from 'zeno';
 
-export async function GET(req: Request, res: Response) {
+export async function GET(_req: Request, res: Response) {
   res.initSSE();
-  
+
   console.log("Sending regular updates");
-  res.sseSend({ status: "connected" });
-  
+  res.sseSend(JSON.stringify({ status: "connected" }));
+
   res.sseEvent("userUpdate", { id: 1, name: "John" });
   res.sseClose();
-
 }

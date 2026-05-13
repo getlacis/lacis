@@ -1,4 +1,4 @@
-import type { Request, Response } from "@/types";
+import type { Request, Response } from 'zeno';
 
 export const beforeRequest = (req: Request, res: Response) => {
   res.setHeader("X-Root-Middleware", "true");
@@ -10,7 +10,7 @@ export const beforeRequest = (req: Request, res: Response) => {
   return true;
 };
 
-export const afterRequest = (req: Request, res: Response) => {
+export const afterRequest = (_req: Request, res: Response) => {
   if (process.env.NODE_ENV === "development") {
     console.log(`[ROOT] Response sent with status: ${res.statusCode}`);
   }

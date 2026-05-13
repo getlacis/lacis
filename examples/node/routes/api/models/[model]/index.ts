@@ -1,7 +1,5 @@
-import { IncomingMessage, ServerResponse } from "http";
+import type { Request, Response } from 'zeno';
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  const { model } = (req as any).params;
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ message: `Model: ${model}` }));
+export async function GET(req: Request, res: Response) {
+  res.status(200).json({ message: `Model: ${req.params!.model}` });
 }

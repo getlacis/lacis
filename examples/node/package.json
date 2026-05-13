@@ -10,6 +10,9 @@
     "build": "NODE_ENV=development bun server.ts",
     "dev": "NODE_ENV=development bun --watch server.ts"
   },
+  "dependencies": {
+    "zeno": "file:../../"
+  },
   "peerDependencies": {
     "typescript": "^5.8.2"
   }

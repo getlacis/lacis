@@ -1,5 +1,5 @@
-import type { Request, Response } from "@/types";
+import type { Request, Response } from 'zeno';
 
-export const GET = async (req: Request, res: Response) => {
+export const GET = async (_req: Request, res: Response) => {
   res.send("Hello World!");
 };

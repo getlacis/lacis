@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.example.json",
   "compilerOptions": {
     "rootDir": "../../",
+    "types": ["bun-types"],
     "paths": {
+      "zeno": ["../../src/index.ts"],
+      "zeno/adapters": ["../../src/adapters/index.ts"],
       "@/*": ["../../src/*"],
       "@core/*": ["../../src/core/*"]
     }

@@ -1,21 +1,17 @@
-import type { Request, Response } from "@/index";
+import type { Request, Response } from 'zeno';
 
-export async function GET(req: Request, res: Response) {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ message: "Get all users" }));
-  }
-  
-  export async function POST(req: Request, res: Response) {
-    res.writeHead(201, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ message: "Create new user" }));
-  }
-  
-  export async function PUT(req: Request, res: Response) {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ message: "Update user" }));
-  }
-  
-  export async function DELETE(req: Request, res: Response) {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ message: "Delete user" }));
-  }
+export async function GET(_req: Request, res: Response) {
+  res.status(200).json({ message: "Get all users" });
+}
+
+export async function POST(_req: Request, res: Response) {
+  res.status(201).json({ message: "Create new user" });
+}
+
+export async function PUT(_req: Request, res: Response) {
+  res.status(200).json({ message: "Update user" });
+}
+
+export async function DELETE(_req: Request, res: Response) {
+  res.status(200).json({ message: "Delete user" });
+}

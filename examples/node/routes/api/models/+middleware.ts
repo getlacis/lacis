@@ -1,13 +1,11 @@
-import type { Request, Response } from "@/types";
+import type { Request, Response } from 'zeno';
 
 export const beforeRequest = async (req: Request, res: Response) => {
-  console.log(`[API] Request2: ${req.method} ${req.url}`);
-  
-  res.setHeader('X-API-Middleware2', 'true');
-  
+  console.log(`[API] Request: ${req.method} ${req.url}`);
+  res.setHeader('X-API-Middleware', 'true');
   return true;
 };
 
-export const afterRequest = async (req: Request, res: Response) => {
-  console.log(`[API] Response sent with status2: ${res.statusCode}`);
+export const afterRequest = async (_req: Request, res: Response) => {
+  console.log(`[API] Response sent with status: ${res.statusCode}`);
 };

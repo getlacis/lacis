@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": "./",
     "outDir": "./dist",
     "lib": ["ESNext", "DOM"],
     "target": "ESNext",
@@ -16,8 +15,8 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["src/*"],
-      "@core/*": ["src/core/*"]
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"]
     },
     "noUnusedLocals": false,
     "noUnusedParameters": false,
