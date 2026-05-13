@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    "baseUrl": "./",
     "outDir": "./dist",
-    "lib": ["ESNext", "DOM"],
+    "lib": ["ESNext"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
@@ -17,16 +16,19 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["src/*"],
-      "@core/*": ["src/core/*"]
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"]
     },
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+    "types": ["node", "jest"]
   },
   "exclude": [
-    "node_modules", 
+    "node_modules",
     "examples",
-    "dist"      
+    "dist",
+    "tests",
+    "jest.config.cjs"
   ]
 }
