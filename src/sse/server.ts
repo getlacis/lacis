@@ -1,7 +1,7 @@
 import { ServerResponse } from "http";
 import type { SSEOptions } from "@/types/index";
 
-export function initSSE(res: ServerResponse, options?: SSEOptions) {
+export function initSSE(res: ServerResponse, options?: SSEOptions): ReturnType<typeof setTimeout> {
   const cacheControl = options?.headers?.["Cache-Control"] || "no-cache";
   const connection = options?.headers?.["Connection"] || "keep-alive";
 
