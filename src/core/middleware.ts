@@ -149,11 +149,7 @@ async function loadMiddlewares(routesDir: string) {
         const fullPath = path.join(dir, middlewareFile.name);
         try {
           const absolutePath = path.resolve(fullPath);
-          if (require.cache[require.resolve(absolutePath)]) {
-            delete require.cache[require.resolve(absolutePath)];
-          }
-          
-          const middlewareModule = await import(absolutePath);
+          const middlewareModule = await import(`${absolutePath}?update=${Date.now()}`);
           
           if (!pathMiddlewares.has(prefix)) {
             pathMiddlewares.set(prefix, {
@@ -208,11 +204,19 @@ function getPathMiddlewares() {
   return pathMiddlewares;
 }
 
-export { 
-  addMiddleware, 
+function resetMiddlewares() {
+  globalMiddlewares.beforeRequest = [];
+  globalMiddlewares.afterRequest = [];
+  globalMiddlewares.onError = [];
+  pathMiddlewares.clear();
+}
+
+export {
+  addMiddleware,
   addPathMiddleware,
-  runMiddlewares, 
-  loadMiddlewares, 
-  getPathMiddlewares, 
-  collectMiddleware 
+  runMiddlewares,
+  loadMiddlewares,
+  getPathMiddlewares,
+  collectMiddleware,
+  resetMiddlewares,
 };
