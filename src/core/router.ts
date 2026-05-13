@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import type { RouteHandlers } from "@/types";
+import type { RouteHandlers, ServerlessRoute } from "@/types";
 import { loadMiddlewares } from "./middleware";
 import { primaryLog } from "@/utils/logs";
 
@@ -407,6 +407,20 @@ const router = new Router();
 
 function isRouteError(obj: any): obj is RouteError {
   return obj && typeof obj === 'object' && 'error' in obj;
+}
+
+export function registerRoutes(routes: ServerlessRoute[]): void {
+  for (const { path, handlers } of routes) {
+    // Convert Express-style :param to router's [param] syntax
+    const normalizedPath = path.replace(/:(\w+\??)/g, (_, name) =>
+      name.endsWith('?') ? `[${name.slice(0, -1)}?]` : `[${name}]`
+    )
+    for (const [method, handler] of Object.entries(handlers)) {
+      if (typeof handler === 'function') {
+        router.addRoute(method, normalizedPath, handler)
+      }
+    }
+  }
 }
 
 export async function loadRoutes(routesDir: string) {
