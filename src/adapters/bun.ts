@@ -1,4 +1,4 @@
-import type { Adapter, ServerConfig } from "@/types";
+import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import type { Server } from "bun";
 import { loadRoutes, findRoute } from "@/core/router";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
@@ -16,7 +16,11 @@ const MAX_ROUTE_CACHE = 2000;
 
 export const bunAdapter: Adapter = {
   name: "bun",
-  createHandler: (routesDir: string) => {
+  createHandler: (config: string | ServerlessConfig) => {
+    if (typeof config !== "string") {
+      throw new Error("bunAdapter requires a routesDir string, not a ServerlessConfig.");
+    }
+    const routesDir = config;
     const transformRequest = bunAdapter.transformRequest!;
     const transformResponse = bunAdapter.transformResponse!;
 
