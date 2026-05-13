@@ -6,6 +6,13 @@ import type {
   SSEOptions,
 } from "./";
 
+interface UploadedFile {
+  filename: string;
+  mimetype: string;
+  data: Buffer;
+  size: number;
+}
+
 interface Request extends IncomingMessage {
   params?: Record<string, string>;
   query?: Record<string, string>;
@@ -36,4 +43,4 @@ interface Response extends ServerResponse {
   sseError(event: string, error: string, code?: number, details?: string): void;
 }
 
-export type { Request, Response };
+export type { Request, Response, UploadedFile };

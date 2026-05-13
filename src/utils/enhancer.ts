@@ -20,6 +20,22 @@ import type {
   SSEClient,
 } from "@/types";
 
+// Default limit for request bodies. For large file uploads, thread a
+// maxBodySize option through ServerConfig → adapter → enhanceRequest.
+const MAX_BODY_SIZE = 10_485_760; // 10 MB
+
+function splitBuffer(buf: Buffer, delimiter: Buffer): Buffer[] {
+  const parts: Buffer[] = [];
+  let offset = 0;
+  let idx: number;
+  while ((idx = buf.indexOf(delimiter, offset)) !== -1) {
+    parts.push(buf.subarray(offset, idx));
+    offset = idx + delimiter.length;
+  }
+  parts.push(buf.subarray(offset));
+  return parts;
+}
+
 function enhanceRequest(req: IncomingMessage): Request {
   const enhanced = req as Request;
 
@@ -36,7 +52,7 @@ function enhanceRequest(req: IncomingMessage): Request {
 
   enhanced.bindForm = function <T>(): Promise<T> {
     return new Promise((resolve, reject) => {
-      let contentType = this.headers['content-type'];
+      const contentType = this.headers['content-type'];
 
       if (!contentType || !contentType.startsWith('multipart/form-data')) {
         reject(new Error('Content-Type is not multipart/form-data'));
@@ -53,26 +69,37 @@ function enhanceRequest(req: IncomingMessage): Request {
 
       this.body()
         .then(buffer => {
-          const bodyString = buffer.toString();
-          const parts = bodyString.split(boundary).slice(1, -1);
-
           const result: any = {};
+          const delimiter = Buffer.from(`--${boundary}`);
+          const parts = splitBuffer(buffer, delimiter);
 
-          for (const part of parts) {
-            const contentDispositionMatch = part.match(/Content-Disposition: form-data; name="([^"]+)"(?:; filename="([^"]+)")?/);
+          // parts[0] = preamble, parts[last] = "--\r\n" epilogue
+          for (let i = 1; i < parts.length - 1; i++) {
+            const part = parts[i];
+            // Each part: \r\n<headers>\r\n\r\n<body>\r\n
+            const content = part.subarray(2); // strip leading \r\n
+            const sepIdx = content.indexOf('\r\n\r\n');
+            if (sepIdx === -1) continue;
 
-            if (contentDispositionMatch) {
-              const fieldName = contentDispositionMatch[1];
-              const filename = contentDispositionMatch[2];
-              const valueStart = part.indexOf('\r\n\r\n') + 4;
-              const valueEnd = part.lastIndexOf('\r\n');
-              const value = part.substring(valueStart, valueEnd);
+            const headers = content.subarray(0, sepIdx).toString('utf-8');
+            const body = content.subarray(sepIdx + 4, content.length - 2); // strip trailing \r\n
 
-              if (filename) {
-                // TODO: Handle file upload
-              } else {
-                result[fieldName] = value.trim();
-              }
+            const dispositionMatch = headers.match(/Content-Disposition: form-data; name="([^"]+)"(?:; filename="([^"]+)")?/i);
+            if (!dispositionMatch) continue;
+
+            const fieldName = dispositionMatch[1];
+            const filename = dispositionMatch[2];
+
+            if (filename) {
+              const mimeMatch = headers.match(/Content-Type:\s*([^\r\n]+)/i);
+              result[fieldName] = {
+                filename,
+                mimetype: mimeMatch ? mimeMatch[1].trim() : 'application/octet-stream',
+                data: body,
+                size: body.length,
+              };
+            } else {
+              result[fieldName] = body.toString('utf-8');
             }
           }
 
@@ -83,11 +110,24 @@ function enhanceRequest(req: IncomingMessage): Request {
   }
 
   enhanced.body = function (): Promise<Buffer> {
+    const stream = this as unknown as IncomingMessage;
     const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
     return new Promise((resolve, reject) => {
-      this.on("data", (chunk: Buffer) => chunks.push(chunk))
-          .on("end", () => resolve(Buffer.concat(chunks)))
-          .on("error", reject);
+      stream
+        .on("data", (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > MAX_BODY_SIZE) {
+            settled = true;
+            stream.destroy();
+            reject(Object.assign(new Error("Payload Too Large"), { code: 413 }));
+            return;
+          }
+          chunks.push(chunk);
+        })
+        .on("end", () => { if (!settled) { settled = true; resolve(Buffer.concat(chunks)); } })
+        .on("error", (err: Error) => { if (!settled) { settled = true; reject(err); } });
     });
   };
 
