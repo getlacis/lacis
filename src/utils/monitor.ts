@@ -368,7 +368,13 @@ function createMonitor(options: MonitorOptions = {}) {
 
 function getMonitor(options?: MonitorOptions) {
   if (!monitorInstance) {
-    monitorInstance = createMonitor(options);
+    const instance = createMonitor(options);
+    const originalStop = instance.stop;
+    instance.stop = () => {
+      originalStop();
+      monitorInstance = null;
+    };
+    monitorInstance = instance;
   }
   return monitorInstance;
 }
