@@ -1,35 +1,44 @@
-import type { Adapter, RouteHandlers } from "@/types";
-import type { Route, Handler } from "@/types";
+import type { Adapter } from "@/types";
 import type { VercelRequest, VercelResponse } from "@/types";
 import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { findRoute } from "@core/router";
+import { findRoute, isRouteError } from "@/core/router";
+import { runMiddlewares } from "@/core/middleware";
 import { IncomingMessage, ServerResponse } from "http";
 
 export const vercelAdapter: Adapter = {
   name: "vercel",
-  createHandler: (routesDir: string) => {
+  createHandler: (_routesDir: string) => {
     return async (req: VercelRequest, res: VercelResponse) => {
-      const route = findRoute(
-        req.url || "/",
-        req.method || "GET"
-      ) as Route | null;
-      const method = req.method as keyof RouteHandlers;
+      const enhancedReq = enhanceRequest(req as unknown as IncomingMessage);
+      const enhancedRes = enhanceResponse(res as unknown as ServerResponse);
+
+      const route = findRoute(req.url || "/", req.method || "GET");
 
       if (!route) {
-        return res.status(404).json({ error: "Route not found" });
+        enhancedRes.status(404).json({ error: "Route not found" });
+        return;
       }
 
-      const handler = route.handlers[method] as Handler;
-
-      if (!handler) {
-        return res.status(404).json({ error: "Method not allowed" });
+      if (isRouteError(route)) {
+        enhancedRes.status(route.status || 500).json({ error: route.error });
+        return;
       }
-      
+
+      enhancedReq.params = route.params;
+
       try {
-        await handler(req as IncomingMessage, res as unknown as ServerResponse);
+        const shouldContinue = await runMiddlewares("beforeRequest", enhancedReq, enhancedRes);
+        if (shouldContinue === false || enhancedRes.headersSent) return;
+
+        await route.handler(enhancedReq, enhancedRes);
+
+        await runMiddlewares("afterRequest", enhancedReq, enhancedRes);
       } catch (error) {
         console.error("Handler error:", error);
-        return res.status(500).json({ error: "Internal server error" });
+        await runMiddlewares("onError", enhancedReq, enhancedRes, { error });
+        if (!enhancedRes.headersSent) {
+          enhancedRes.status(500).json({ error: "Internal server error" });
+        }
       }
     };
   },
