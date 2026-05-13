@@ -1,4 +1,5 @@
 import http from "http";
+import https from "https";
 import cluster from "cluster";
 import os from "os";
 import type { Adapter, ServerConfig } from "@/types";
@@ -139,17 +140,10 @@ export const nodeAdapter: Adapter = {
                 );
 
                 if (route) {
-                  routeCache.set(cacheKey, route);
-
-                  if (routeCache.size > MAX_ROUTE_CACHE) {
-                    const keysToDelete = Array.from(routeCache.keys()).slice(
-                      0,
-                      100
-                    );
-                    for (const key of keysToDelete) {
-                      routeCache.delete(key);
-                    }
+                  if (routeCache.size >= MAX_ROUTE_CACHE) {
+                    routeCache.delete(routeCache.keys().next().value!);
                   }
+                  routeCache.set(cacheKey, route);
                 }
               }
 
@@ -216,12 +210,16 @@ export const nodeAdapter: Adapter = {
           });
         };
 
-        const server = http.createServer(requestListener);
+        const server = config.httpsOptions
+          ? https.createServer(config.httpsOptions, requestListener)
+          : http.createServer(requestListener);
+
+        const protocol = config.httpsOptions ? "https" : "http";
 
         server.listen(port, () => {
           if (cluster.isPrimary || !clusterConfig?.enabled) {
             primaryLog(
-              `🚀 Server running at http://localhost:${port}/` +
+              `🚀 Server running at ${protocol}://localhost:${port}/` +
                 (isDev ? " (dev)" : "")
             );
             if (isDev && performanceMonitor) {
