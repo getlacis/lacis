@@ -26,29 +26,35 @@ export function initSSE(res: ServerResponse, options?: SSEOptions): ReturnType<t
   return timeoutId;
 }
 
-export function send(res: ServerResponse, data: any) {
-  res.write(`data: ${data}\n\n`);
+export function send(res: ServerResponse, data: any): boolean {
+  if (res.writableEnded) return false;
+  return res.write(`data: ${data}\n\n`);
 }
 
-export function sendJson(res: ServerResponse, data: any) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+export function sendJson(res: ServerResponse, data: any): boolean {
+  if (res.writableEnded) return false;
+  return res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-export function sendEvent(res: ServerResponse, event: string, data: any) {
+export function sendEvent(res: ServerResponse, event: string, data: any): boolean {
+  if (res.writableEnded) return false;
   res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+  return res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-export function sseComment(res: ServerResponse, comment: string) {
-  res.write(`: ${comment}\n\n`);
+export function sseComment(res: ServerResponse, comment: string): boolean {
+  if (res.writableEnded) return false;
+  return res.write(`: ${comment}\n\n`);
 }
 
-export function sseId(res: ServerResponse, id: string) {
-  res.write(`id: ${id}\n\n`);
+export function sseId(res: ServerResponse, id: string): boolean {
+  if (res.writableEnded) return false;
+  return res.write(`id: ${id}\n\n`);
 }
 
-export function sseRetry(res: ServerResponse, ms: number) {
-  res.write(`retry: ${ms}\n\n`);
+export function sseRetry(res: ServerResponse, ms: number): boolean {
+  if (res.writableEnded) return false;
+  return res.write(`retry: ${ms}\n\n`);
 }
 
 export function sseClose(
