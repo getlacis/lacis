@@ -1,11 +1,9 @@
 import { cpSync, existsSync } from 'fs'
-import { join, dirname, relative } from 'path'
-import { fileURLToPath } from 'url'
+import { join, relative } from 'path'
 import { readdirSync, statSync } from 'fs'
 
 type Platform = 'netlify' | 'vercel' | null
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
 const templatesDir = join(__dirname, 'templates')
 
 function listFiles(dir: string): string[] {

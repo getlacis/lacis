@@ -75,7 +75,7 @@ function makeReqRes(url = '/users', method = 'GET') {
 
 // Starts the adapter and captures the HTTP requestListener.
 async function startAndCapture(config = baseConfig as any) {
-  let capturedListener: (req: any, res: any) => void = () => {};
+  let capturedListener: (req: Request, res: Response) => void = () => {};
   const httpSpy = jest.spyOn(http, 'createServer').mockImplementation((...args: any[]) => {
     capturedListener = typeof args[0] === 'function' ? args[0] : args[1];
     return makeMockServer() as any;
@@ -92,9 +92,6 @@ beforeEach(() => {
   mockFindRoute.mockReturnValue(null);
 });
 
-// ---------------------------------------------------------------------------
-// HTTP vs HTTPS
-// ---------------------------------------------------------------------------
 
 describe('nodeAdapter — HTTP vs HTTPS', () => {
   let httpSpy: jest.SpyInstance;
@@ -127,9 +124,6 @@ describe('nodeAdapter — HTTP vs HTTPS', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Middleware config registration
-// ---------------------------------------------------------------------------
 
 describe('nodeAdapter — middleware config', () => {
   let httpSpy: jest.SpyInstance;
@@ -162,13 +156,10 @@ describe('nodeAdapter — middleware config', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Request handling
-// ---------------------------------------------------------------------------
 
 describe('nodeAdapter — request handling', () => {
   let httpSpy: jest.SpyInstance;
-  let listener: (req: any, res: any) => void;
+  let listener: (req: Request, res: Response) => void;
 
   beforeEach(async () => {
     const result = await startAndCapture();
@@ -187,7 +178,7 @@ describe('nodeAdapter — request handling', () => {
   });
 
   it('calls the route handler when a route is found', async () => {
-    const routeHandler = jest.fn().mockImplementation(async (_req: any, res: any) => {
+    const routeHandler = jest.fn().mockImplementation(async (_req: Request, res: Response) => {
       res.status(200).json({ ok: true });
     });
     mockFindRoute.mockReturnValue({ handler: routeHandler, params: {} });
@@ -220,7 +211,7 @@ describe('nodeAdapter — request handling', () => {
   it('stops request and does not call route handler when beforeRequest returns false', async () => {
     const routeHandler = jest.fn();
     mockFindRoute.mockReturnValue({ handler: routeHandler, params: {} });
-    mockRunMiddlewares.mockImplementation(async (type: string, _req: any, res: any) => {
+    mockRunMiddlewares.mockImplementation(async (type: string, _req: Request, res: Response) => {
       if (type === 'beforeRequest') {
         res.status(403).json({ error: 'forbidden' });
         return false;
@@ -242,7 +233,7 @@ describe('nodeAdapter — request handling', () => {
     const afterRequestCalled = new Promise<void>(r => { resolveAfter = r; });
 
     mockFindRoute.mockReturnValue({
-      handler: async (_req: any, res: any) => {
+      handler: async (_req: Request, res: Response) => {
         order.push('handler');
         res.status(200).json({ ok: true });
       },
@@ -283,7 +274,7 @@ describe('nodeAdapter — request handling', () => {
     });
 
     mockFindRoute.mockReturnValue({
-      handler: async (_req: any, res: any) => { res.status(200).json({}); },
+      handler: async (_req: Request, res: Response) => { res.status(200).json({}); },
       params: {},
     });
 

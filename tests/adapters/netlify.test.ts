@@ -173,7 +173,7 @@ describe("netlifyAdapter handler", () => {
 
   it("makes the body parseable via req.json()", async () => {
     const handler = netlifyAdapter.createHandler({ routes: [] }) as Function;
-    let parsed: any;
+    let parsed: unknown;
 
     mockFindRoute.mockReturnValue({
       handler: async (req: Request, res: Response) => {
@@ -283,7 +283,7 @@ describe("netlifyAdapter handler", () => {
     const order: string[] = [];
 
     mockFindRoute.mockReturnValue({
-      handler: async (_req: any, res: any) => {
+      handler: async (_req: Request, res: Response) => {
         order.push("handler");
         res.status(200).json({ ok: true });
       },

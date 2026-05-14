@@ -22,6 +22,7 @@ jest.mock('@/core/middleware', () => ({
 jest.mock('@/utils/logs', () => ({ primaryLog: jest.fn() }));
 
 import { bunAdapter } from '@/adapters/bun';
+import type { Request as ZenoRequest, Response as ZenoResponse } from '@/types';
 
 function makeRequest(path: string, method = 'GET'): Request {
   return new Request(`http://localhost${path}`, { method });
@@ -38,7 +39,7 @@ async function readStream(body: ReadableStream<Uint8Array>): Promise<string> {
   return Buffer.concat(chunks.map(c => Buffer.from(c))).toString();
 }
 
-async function startAndCaptureFetch(config: Record<string, any> = {}) {
+async function startAndCaptureFetch(config: Record<string, unknown> = {}) {
   let capturedFetch!: (req: Request) => Promise<Response>;
   mockBunServe.mockImplementation(({ fetch }: any) => {
     capturedFetch = fetch;
@@ -113,7 +114,7 @@ describe('bunAdapter — routing', () => {
   it('calls the route handler and returns its response', async () => {
     const fetch = await startAndCaptureFetch();
     mockFindRoute.mockReturnValue(
-      makeRoute(async (_req: any, res: any) => res.status(201).json({ created: true })),
+      makeRoute(async (_req: ZenoRequest, res: ZenoResponse) => res.status(201).json({ created: true })),
     );
     const res = await fetch(makeRequest('/users', 'POST'));
     expect(res.status).toBe(201);
@@ -122,9 +123,9 @@ describe('bunAdapter — routing', () => {
 
   it('forwards route params to req.params', async () => {
     const fetch = await startAndCaptureFetch();
-    let captured: Record<string, string> = {};
+    let captured: Record<string, string> | undefined;
     mockFindRoute.mockReturnValue({
-      handler: async (req: any, res: any) => { captured = req.params; res.status(200).json({}); },
+      handler: async (req: ZenoRequest, res: ZenoResponse) => { captured = req.params; res.status(200).json({}); },
       params: { id: '42' },
     });
     await fetch(makeRequest('/users/42'));
@@ -134,7 +135,7 @@ describe('bunAdapter — routing', () => {
   it('applies defaultHeaders to every response', async () => {
     const fetch = await startAndCaptureFetch({ defaultHeaders: { 'x-powered-by': 'zeno' } });
     mockFindRoute.mockReturnValue(
-      makeRoute(async (_req: any, res: any) => res.status(200).json({})),
+      makeRoute(async (_req: ZenoRequest, res: ZenoResponse) => res.status(200).json({})),
     );
     const res = await fetch(makeRequest('/'));
     expect(res.headers.get('x-powered-by')).toBe('zeno');
@@ -151,7 +152,7 @@ describe('bunAdapter — routing', () => {
   it('auto-ends the response when the handler returns without calling res.end()', async () => {
     const fetch = await startAndCaptureFetch();
     mockFindRoute.mockReturnValue(
-      makeRoute(async (_req: any, res: any) => { res.statusCode = 204; }),
+      makeRoute(async (_req: ZenoRequest, res: ZenoResponse) => { res.statusCode = 204; }),
     );
     const res = await fetch(makeRequest('/'));
     expect(res.status).toBe(204);
@@ -165,7 +166,7 @@ describe('bunAdapter — middleware', () => {
     const fetch = await startAndCaptureFetch();
     const handler = jest.fn();
     mockFindRoute.mockReturnValue(makeRoute(handler));
-    mockRunMiddlewares.mockImplementation(async (type: string, _req: any, res: any) => {
+    mockRunMiddlewares.mockImplementation(async (type: string, _req: ZenoRequest, res: ZenoResponse) => {
       if (type === 'beforeRequest') { res.status(403).json({ error: 'forbidden' }); return false; }
       return true;
     });
@@ -178,7 +179,7 @@ describe('bunAdapter — middleware', () => {
     const fetch = await startAndCaptureFetch();
     const order: string[] = [];
     mockFindRoute.mockReturnValue(
-      makeRoute(async (_req: any, res: any) => { order.push('handler'); res.status(200).json({}); }),
+      makeRoute(async (_req: ZenoRequest, res: ZenoResponse) => { order.push('handler'); res.status(200).json({}); }),
     );
     mockRunMiddlewares.mockImplementation(async (type: string) => { order.push(type); return true; });
     await fetch(makeRequest('/'));
@@ -203,7 +204,7 @@ describe('bunAdapter — SSE', () => {
   it('returns a streaming response when initSSE is called synchronously', async () => {
     const fetch = await startAndCaptureFetch();
     mockFindRoute.mockReturnValue(
-      makeRoute(async (_req: any, res: any) => {
+      makeRoute(async (_req: ZenoRequest, res: ZenoResponse) => {
         res.initSSE({ timeout: 60000 });
         res.sseSend('hello');
         res.sseClose();
@@ -218,7 +219,7 @@ describe('bunAdapter — SSE', () => {
   it('streams multiple events in order', async () => {
     const fetch = await startAndCaptureFetch();
     mockFindRoute.mockReturnValue(
-      makeRoute(async (_req: any, res: any) => {
+      makeRoute(async (_req: ZenoRequest, res: ZenoResponse) => {
         res.initSSE({ timeout: 60000 });
         res.sseEvent('tick', { n: 1 });
         res.sseEvent('tick', { n: 2 });
@@ -235,7 +236,7 @@ describe('bunAdapter — SSE', () => {
     const fetch = await startAndCaptureFetch();
     let caughtError: unknown = null;
     mockFindRoute.mockReturnValue({
-      handler: (_req: any, res: any) =>
+      handler: (_req: ZenoRequest, res: ZenoResponse) =>
         new Promise<void>(resolve => {
           setTimeout(() => {
             try { res.initSSE(); } catch (e) { caughtError = e as Error; }
