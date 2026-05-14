@@ -1,33 +1,17 @@
 import fs from "fs/promises";
 import path from "path";
-import type { RouteHandlers, ServerlessRoute } from "@/types";
+import type { ServerlessRoute } from "@/types";
 import { loadMiddlewares } from "./middleware";
 import { primaryLog } from "@/utils/logs";
 
 function parsePattern(pattern: string) {
-  const paramRegex = /^\[(\w+)(\??)]/;
-  const isParam = paramRegex.test(pattern);
-  
-  if (isParam) {
-    const [, name, optional] = pattern.match(paramRegex) || [];
-    return {
-      name,
-      isParam: true,
-      isOptional: optional === '?',
-      pattern: null
-    };
-  }
-  
-  return {
-    name: pattern,
-    isParam: false,
-    isOptional: false,
-    pattern: null
-  };
+  const match = pattern.match(/^\[(\w+)(\??)]/);
+  if (match) return { name: match[1], isParam: true, isOptional: match[2] === "?" };
+  return { name: pattern, isParam: false, isOptional: false };
 }
 
 interface RouteMatchResult {
-  handlers: Function[];
+  handler: Function | null;
   params: Record<string, string>;
   allowedMethods?: string[];
 }
@@ -38,22 +22,22 @@ interface RouteError {
   allowedMethods?: string[];
 }
 
-type FindRouteResult = 
+type FindRouteResult =
   | { handler: Function; params: Record<string, string> }
   | RouteError
   | null;
 
 interface RouteNode {
-  handlers: Record<string, Function[]>;
+  // null-prototype object: avoids accidental prototype key collisions (e.g. "toString")
+  handlers: Record<string, Function>;
   staticChildren: Map<string, RouteNode>;
-  paramChild: {
-    name: string;
-    node: RouteNode;
-    isOptional: boolean;
-  } | null;
-  wildcardHandler: Record<string, Function[]> | null;
+  paramChild: { name: string; node: RouteNode; isOptional: boolean } | null;
+  wildcardHandler: Record<string, Function> | null;
   isEndpoint: boolean;
 }
+
+const CACHE_MAX = 1000;
+const CACHE_EVICT = 100;
 
 class Router {
   private rootNode: RouteNode;
@@ -61,7 +45,7 @@ class Router {
   private routeCount: number;
   private lastLoaded: number;
   private verbose: boolean;
-  
+
   constructor() {
     this.rootNode = this.createNode();
     this.cachedRoutes = new Map();
@@ -69,326 +53,194 @@ class Router {
     this.lastLoaded = 0;
     this.verbose = false;
   }
-  
+
   private createNode(): RouteNode {
     return {
-      handlers: {},
+      handlers: Object.create(null),
       staticChildren: new Map(),
       paramChild: null,
       wildcardHandler: null,
-      isEndpoint: false
+      isEndpoint: false,
     };
   }
-  
+
   addRoute(method: string, routePath: string, handler: Function): Router {
-    const segments = routePath.split('/').filter(Boolean);
-    let currentNode = this.rootNode;
-    
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
+    const segments = routePath.split("/").filter(Boolean);
+    let node = this.rootNode;
+
+    for (const segment of segments) {
       const parsed = parsePattern(segment);
-      
       if (parsed.isParam) {
-        if (!currentNode.paramChild) {
-          currentNode.paramChild = {
-            name: parsed.name,
-            node: this.createNode(),
-            isOptional: parsed.isOptional
-          };
+        if (!node.paramChild) {
+          node.paramChild = { name: parsed.name, node: this.createNode(), isOptional: parsed.isOptional };
         }
-        currentNode = currentNode.paramChild.node;
-      } else if (segment === '*') {
-        if (!currentNode.wildcardHandler) {
-          currentNode.wildcardHandler = {};
-        }
-        if (!currentNode.wildcardHandler[method]) {
-          currentNode.wildcardHandler[method] = [];
-        }
-        currentNode.wildcardHandler[method].push(handler);
+        node = node.paramChild.node;
+      } else if (segment === "*") {
+        if (!node.wildcardHandler) node.wildcardHandler = Object.create(null);
+        node.wildcardHandler![method] = handler;
+        this.cachedRoutes.clear();
         return this;
       } else {
-        if (!currentNode.staticChildren.has(segment)) {
-          currentNode.staticChildren.set(segment, this.createNode());
-        }
-        currentNode = currentNode.staticChildren.get(segment)!;
+        if (!node.staticChildren.has(segment)) node.staticChildren.set(segment, this.createNode());
+        node = node.staticChildren.get(segment)!;
       }
     }
-    
-    currentNode.isEndpoint = true;
-    
-    if (!currentNode.handlers[method]) {
-      currentNode.handlers[method] = [];
-    }
-    
-    currentNode.handlers[method].push(handler);
+
+    node.isEndpoint = true;
+    node.handlers[method] = handler;
     this.routeCount++;
-    
     this.cachedRoutes.clear();
-    
     return this;
   }
-  
+
   findRoute(method: string, url: string): RouteMatchResult {
-    const normalizedUrl = url === '/' ? '/' : url.replace(/\/+$/, '');
-    
-    const cacheKey = `${method}:${normalizedUrl}`;
-    if (this.cachedRoutes.has(cacheKey)) {
-      return this.cachedRoutes.get(cacheKey)!;
-    }
-    
-    const segments = normalizedUrl.split('/').filter(Boolean);
-    
-    const result = this.findRouteRecursive(this.rootNode, segments, method, {});
-    
-    if (!result || result.handlers.length === 0) {
-      const allowedMethods = this.getAllowedMethods(normalizedUrl);
-      
-      if (allowedMethods.length > 0) {
-        const methodNotAllowedResult: RouteMatchResult = { 
-          handlers: [], 
-          params: {},
-          allowedMethods 
-        };
-        
-        this.cachedRoutes.set(cacheKey, methodNotAllowedResult);
-        
-        return methodNotAllowedResult;
+    const normalizedUrl = url === "/" ? "/" : url.replace(/\/+$/, "");
+    const cacheKey = method + ":" + normalizedUrl;
+
+    const cached = this.cachedRoutes.get(cacheKey);
+    if (cached) return cached;
+
+    const segments = normalizedUrl === "/" ? [] : normalizedUrl.split("/").filter(Boolean);
+    // Reusable scratch object — traverse mutates and restores it, copies on return
+    const params: Record<string, string> = Object.create(null);
+
+    const result = this.traverse(this.rootNode, segments, method, params, 0)
+      ?? { handler: null, params: Object.create(null) };
+
+    if (this.cachedRoutes.size >= CACHE_MAX) {
+      let evicted = 0;
+      for (const key of this.cachedRoutes.keys()) {
+        this.cachedRoutes.delete(key);
+        if (++evicted >= CACHE_EVICT) break;
       }
     }
-    
-    if (result) {
-      if (this.cachedRoutes.size >= 1000) {
-        let evicted = 0;
-        for (const key of this.cachedRoutes.keys()) {
-          this.cachedRoutes.delete(key);
-          if (++evicted >= 100) break;
-        }
-      }
-      this.cachedRoutes.set(cacheKey, result);
-    }
-    
-    return result || { handlers: [], params: {} };
+    this.cachedRoutes.set(cacheKey, result);
+    return result;
   }
-  
-  private getAllowedMethods(url: string): string[] {
-    const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
-    const allowedMethods: string[] = [];
-    
-    for (const method of methods) {
-      const result = this.findRouteRecursive(
-        this.rootNode, 
-        url.split('/').filter(Boolean), 
-        method, 
-        {}
-      );
-      
-      if (result && result.handlers.length > 0) {
-        allowedMethods.push(method);
-      }
-    }
-    
-    return allowedMethods;
-  }
-  
-  private findRouteRecursive(
+
+  private traverse(
     node: RouteNode,
     segments: string[],
     method: string,
     params: Record<string, string>,
-    index: number = 0
+    index: number,
   ): RouteMatchResult | null {
     if (index === segments.length) {
       if (node.isEndpoint) {
-        const handlers = [];
-        
-        if (node.handlers[method]) {
-          handlers.push(...node.handlers[method]);
-        }
-        
-        if (method === 'HEAD' && node.handlers['GET']) {
-          handlers.push(...node.handlers['GET']);
-        }
-        
-        if (node.handlers['']) {
-          handlers.push(...node.handlers['']);
-        }
-        
-        if (handlers.length > 0) {
-          return { handlers, params: { ...params } };
-        }
+        const handler =
+          node.handlers[method] ??
+          (method === "HEAD" ? node.handlers["GET"] : undefined) ??
+          node.handlers[""];
+        if (handler) return { handler, params: { ...params } };
+
+        // Path exists but method not registered — collect allowed methods in one pass
+        const allowed = Object.keys(node.handlers).filter((m) => m !== "");
+        return { handler: null, params: {}, allowedMethods: allowed };
       }
-      
-      if (node.paramChild && node.paramChild.isOptional && node.paramChild.node.isEndpoint) {
-        const childHandlers = [];
-        
-        if (node.paramChild.node.handlers[method]) {
-          childHandlers.push(...node.paramChild.node.handlers[method]);
-        }
-        
-        if (method === 'HEAD' && node.paramChild.node.handlers['GET']) {
-          childHandlers.push(...node.paramChild.node.handlers['GET']);
-        }
-        
-        if (node.paramChild.node.handlers['']) {
-          childHandlers.push(...node.paramChild.node.handlers['']);
-        }
-        
-        if (childHandlers.length > 0) {
-          return { handlers: childHandlers, params: { ...params } };
-        }
+
+      // Optional param child at end of URL
+      const oc = node.paramChild;
+      if (oc?.isOptional && oc.node.isEndpoint) {
+        const handler =
+          oc.node.handlers[method] ??
+          (method === "HEAD" ? oc.node.handlers["GET"] : undefined) ??
+          oc.node.handlers[""];
+        if (handler) return { handler, params: { ...params } };
       }
-      
-      const availableMethods = Object.keys(node.handlers).filter(m => 
-        m !== '' && node.handlers[m].length > 0
-      );
-      
-      if (availableMethods.length > 0) {
-        return { handlers: [], params: { ...params }, allowedMethods: availableMethods };
-      }
-      
+
       return null;
     }
-    
+
     const segment = segments[index];
-    let found = null;
-    
-    if (node.staticChildren.has(segment)) {
-      found = this.findRouteRecursive(
-        node.staticChildren.get(segment)!,
-        segments,
-        method,
-        params,
-        index + 1
-      );
-      
+
+    // Static takes priority over param
+    const staticChild = node.staticChildren.get(segment);
+    if (staticChild) {
+      const found = this.traverse(staticChild, segments, method, params, index + 1);
       if (found) return found;
     }
-    
+
+    // Param — mutate params, restore on backtrack
     if (node.paramChild) {
-      const paramName = node.paramChild.name;
-      const newParams = { ...params, [paramName]: segment };
-      
-      found = this.findRouteRecursive(
-        node.paramChild.node,
-        segments,
-        method,
-        newParams,
-        index + 1
-      );
-      
+      const { name, node: child } = node.paramChild;
+      params[name] = segment;
+      const found = this.traverse(child, segments, method, params, index + 1);
       if (found) return found;
+      delete params[name];
     }
-    
-    if (node.wildcardHandler && node.wildcardHandler[method]) {
-      return {
-        handlers: node.wildcardHandler[method],
-        params: { ...params, '*': segments.slice(index).join('/') }
-      };
-    }
-    
-    if (node.wildcardHandler && node.wildcardHandler['']) {
-      return {
-        handlers: node.wildcardHandler[''],
-        params: { ...params, '*': segments.slice(index).join('/') }
-      };
-    }
-    
+
+    // Wildcard
     if (node.wildcardHandler) {
-      const availableMethods = Object.keys(node.wildcardHandler).filter(m => 
-        m !== '' && node.wildcardHandler![m].length > 0
-      );
-      
-      if (availableMethods.length > 0) {
-        return {
-          handlers: [],
-          params: { ...params, '*': segments.slice(index).join('/') },
-          allowedMethods: availableMethods
-        };
-      }
+      const handler = node.wildcardHandler[method] ?? node.wildcardHandler[""];
+      const rest = segments.slice(index).join("/");
+      if (handler) return { handler, params: { ...params, "*": rest } };
+      const allowed = Object.keys(node.wildcardHandler).filter((m) => m !== "");
+      if (allowed.length > 0) return { handler: null, params: { ...params, "*": rest }, allowedMethods: allowed };
     }
-    
+
     return null;
   }
-  
+
   async loadRoutes(routesDir: string): Promise<boolean> {
     this.rootNode = this.createNode();
     this.cachedRoutes.clear();
     this.routeCount = 0;
-    
+
     await loadMiddlewares(routesDir);
-    
-    const self = this; 
-    
+
+    const self = this;
+
     async function scanDir(dir: string, currentPath: string[] = []) {
       try {
         const entries = await fs.readdir(dir, { withFileTypes: true });
-        
-        const indexFile = entries.find(entry => 
-          !entry.isDirectory() && 
-          (entry.name === 'index.ts' || entry.name === 'index.js')
+
+        const indexFile = entries.find(
+          (e) => !e.isDirectory() && (e.name === "index.ts" || e.name === "index.js"),
         );
-        
+
         if (indexFile) {
           try {
-            const fullPath = path.join(dir, indexFile.name);
-            const absolutePath = path.resolve(fullPath);
+            const absolutePath = path.resolve(path.join(dir, indexFile.name));
             const module = await import(`${absolutePath}?update=${Date.now()}`);
-            
-            const handlers: RouteHandlers = {};
+
             const methods = ["GET", "POST", "PUT", "DELETE", "PATCH"];
-            
-            methods.forEach(method => {
+            const routePath = "/" + currentPath.join("/");
+            let registered = false;
+
+            for (const method of methods) {
               if (typeof module[method] === "function") {
-                handlers[method as keyof RouteHandlers] = module[method];
-              }
-            });
-            
-            if (typeof module.default === "function" && !handlers.GET) {
-              handlers.GET = module.default;
-            }
-            
-            if (Object.keys(handlers).length > 0) {
-              const routePath = '/' + currentPath.join('/');
-              
-              Object.entries(handlers).forEach(([method, handler]) => {
-                self.addRoute(method, routePath, handler);
-              });
-              
-              if (self.verbose) {
-                primaryLog(`Route loaded: ${routePath}`);
+                self.addRoute(method, routePath, module[method]);
+                registered = true;
               }
             }
+
+            if (!registered && typeof module.default === "function") {
+              self.addRoute("GET", routePath, module.default);
+            }
+
+            if (self.verbose) primaryLog(`Route loaded: ${routePath}`);
           } catch (error) {
             console.error(`Error loading index in ${dir}:`, error);
           }
         }
-        
+
         for (const entry of entries) {
           if (entry.isDirectory()) {
             const paramMatch = entry.name.match(/^\[(\w+)(\??)]/);
-            const segmentName = paramMatch 
-              ? `[${paramMatch[1]}${paramMatch[2]}]` 
+            const segmentName = paramMatch
+              ? `[${paramMatch[1]}${paramMatch[2]}]`
               : entry.name;
-            
-            await scanDir(
-              path.join(dir, entry.name),
-              [...currentPath, segmentName]
-            );
+            await scanDir(path.join(dir, entry.name), [...currentPath, segmentName]);
           }
         }
       } catch (error) {
         console.error(`Error scanning directory ${dir}:`, error);
       }
     }
-    
+
     await scanDir(routesDir);
-    
     this.lastLoaded = Date.now();
-    
-    if (this.verbose) {
-      primaryLog(`Loading completed: ${this.routeCount} routes`);
-    }
-    
+    if (this.verbose) primaryLog(`Loading completed: ${this.routeCount} routes`);
     return true;
   }
 
@@ -397,10 +249,10 @@ class Router {
       routeCount: this.routeCount,
       lastLoaded: this.lastLoaded,
       uptime: Date.now() - this.lastLoaded,
-      cacheSize: this.cachedRoutes.size
+      cacheSize: this.cachedRoutes.size,
     };
   }
-  
+
   setVerbose(verbose: boolean): Router {
     this.verbose = verbose;
     return this;
@@ -410,19 +262,16 @@ class Router {
 const router = new Router();
 
 function isRouteError(obj: any): obj is RouteError {
-  return obj && typeof obj === 'object' && 'error' in obj;
+  return obj && typeof obj === "object" && "error" in obj;
 }
 
 export function registerRoutes(routes: ServerlessRoute[]): void {
   for (const { path, handlers } of routes) {
-    // Convert Express-style :param to router's [param] syntax
     const normalizedPath = path.replace(/:(\w+\??)/g, (_, name) =>
-      name.endsWith('?') ? `[${name.slice(0, -1)}?]` : `[${name}]`
-    )
+      name.endsWith("?") ? `[${name.slice(0, -1)}?]` : `[${name}]`,
+    );
     for (const [method, handler] of Object.entries(handlers)) {
-      if (typeof handler === 'function') {
-        router.addRoute(method, normalizedPath, handler)
-      }
+      if (typeof handler === "function") router.addRoute(method, normalizedPath, handler);
     }
   }
 }
@@ -433,29 +282,19 @@ export async function loadRoutes(routesDir: string) {
 
 export function findRoute(url: string, method: string = "GET"): FindRouteResult {
   const result = router.findRoute(method, url);
-  
-  if (result.handlers.length === 0 && (!result.allowedMethods || result.allowedMethods.length === 0)) {
+
+  if (!result.handler) {
+    if (result.allowedMethods?.length) {
+      return { error: "Method Not Allowed", status: 405, allowedMethods: result.allowedMethods } as RouteError;
+    }
     return null;
   }
-  
-  if (result.handlers.length === 0 && result.allowedMethods && result.allowedMethods.length > 0) {
-    return {
-      error: "Method Not Allowed",
-      status: 405,
-      allowedMethods: result.allowedMethods
-    } as RouteError;
-  }
-  
-  return {
-    handler: result.handlers[0],
-    params: result.params
-  };
+
+  return { handler: result.handler, params: result.params };
 }
 
 export function getRoutesDir(customDir?: string) {
-  const projectRoot = process.cwd();
-  const routesDir = customDir || process.env.ROUTES_DIR || "routes";
-  return path.resolve(projectRoot, routesDir);
+  return path.resolve(process.cwd(), customDir || process.env.ROUTES_DIR || "routes");
 }
 
 export function getRouterStats() {
