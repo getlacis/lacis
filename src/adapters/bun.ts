@@ -4,7 +4,7 @@ import {
   runMiddlewares,
 } from "@/core/middleware";
 import { findRoute, loadRoutes } from "@/core/router";
-import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
+import type { Adapter, ServerConfig, ServerlessConfig, SSEOptions } from "@/types";
 import {
   withRequestMethods,
   withResponseMethods,
@@ -13,6 +13,7 @@ import {
 import { primaryLog } from "@/utils/logs";
 
 const MAX_BODY_SIZE = 10_485_760;
+const _encoder = new TextEncoder();
 
 class _BunRequestBase {
   params: Record<string, string> = {};
@@ -66,6 +67,9 @@ class _BunResponseBase {
 
   _body: any = null;
   _headers: string[] | null = null;
+  _sseReadable: ReadableStream<Uint8Array> | null = null;
+  private _sseWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private _sseWindowClosed = false;
   private _listeners: ((...a: any[]) => void)[] | null = null;
 
   on(event: string, listener: (...a: any[]) => void) {
@@ -119,19 +123,42 @@ class _BunResponseBase {
     return this;
   }
   write(chunk: any) {
+    if (this._sseWriter) {
+      this._sseWriter.write(_encoder.encode(String(chunk)));
+      return true;
+    }
     this._body = (this._body ?? "") + chunk;
     return true;
   }
   end(data?: any) {
     if (data !== undefined) this.write(data);
+    if (this._sseWriter) this._sseWriter.close();
     this.headersSent = true;
     if (this._listeners)
       for (let i = 0; i < this._listeners.length; i++) this._listeners[i]();
     return this;
   }
+
+  _initSseStream() {
+    if (this._sseWindowClosed)
+      throw new Error("[zeno/bun] initSSE() must be called synchronously before any `await` in your handler.");
+    const { readable, writable } = new TransformStream<Uint8Array>();
+    this._sseReadable = readable;
+    this._sseWriter = writable.getWriter();
+  }
+
+  _closeSseWindow() {
+    this._sseWindowClosed = true;
+  }
 }
 
-class BunResponse extends withResponseMethods(_BunResponseBase) {}
+class BunResponse extends withResponseMethods(_BunResponseBase) {
+  // Override initSSE to set up a TransformStream before calling writeHead
+  initSSE(options?: SSEOptions) {
+    this._initSseStream();
+    return super.initSSE(options);
+  }
+}
 
 export const bunAdapter: Adapter = {
   name: "bun",
@@ -204,11 +231,44 @@ export const bunAdapter: Adapter = {
             }
 
             req.params = route.params;
-            await route.handler(req as any, res as any);
 
-            if (hasMiddlewares())
-              await runMiddlewares("afterRequest", req as any, res as any);
-            if (!res.headersSent) res.end();
+            // Start the handler without awaiting so SSE handlers can run in the background.
+            // The IIFE captures any error for later inspection in the non-SSE path.
+            let handlerError: unknown = null;
+            const handlerDone = (async () => {
+              await route.handler(req as any, res as any);
+              if (hasMiddlewares())
+                await runMiddlewares("afterRequest", req as any, res as any);
+              if (!res.headersSent) res.end();
+            })().catch((err) => {
+              handlerError = err;
+              if (isDev) console.error("Server error:", err);
+              // Close any open SSE stream so the client disconnects cleanly
+              if (!res.headersSent) res.end();
+            });
+
+            // One microtask: enough for synchronous initSSE() at the top of the handler to run.
+            // After this point, calling initSSE() will throw an explicit error.
+            await Promise.resolve();
+            res._closeSseWindow();
+
+            if (res._sseReadable) {
+              // SSE: return the streaming response immediately; handler runs in background
+              return buildResponse(res, res._sseReadable);
+            }
+
+            // Regular request: wait for the handler to complete
+            await handlerDone;
+
+            if (handlerError && !res.headersSent) {
+              return new Response(
+                JSON.stringify({ error: "Internal Server Error" }),
+                {
+                  status: 500,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
 
             return buildResponse(res);
           } catch (error) {
@@ -236,10 +296,11 @@ export const bunAdapter: Adapter = {
   },
 };
 
-function buildResponse(res: _BunResponseBase): Response {
-  if (!res._headers) return new Response(res._body, { status: res.statusCode });
+function buildResponse(res: _BunResponseBase, body?: ReadableStream<Uint8Array> | null): Response {
+  const responseBody = body ?? res._body;
+  if (!res._headers) return new Response(responseBody, { status: res.statusCode });
   const headers = new Headers();
   for (let i = 0; i < res._headers.length; i += 2)
     headers.set(res._headers[i], res._headers[i + 1]);
-  return new Response(res._body, { status: res.statusCode, headers });
+  return new Response(responseBody, { status: res.statusCode, headers });
 }

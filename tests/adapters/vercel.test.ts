@@ -8,6 +8,7 @@ const mockFindRoute = jest.fn();
 const mockIsRouteError = jest.fn((obj: any) => 'error' in obj);
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
 const mockRegisterMiddlewareConfig = jest.fn();
+const mockHasMiddlewares = jest.fn().mockReturnValue(true);
 
 jest.mock('@/core/router', () => ({
   registerRoutes: (...args: any[]) => mockRegisterRoutes(...args),
@@ -18,6 +19,7 @@ jest.mock('@/core/router', () => ({
 jest.mock('@/core/middleware', () => ({
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
   registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
+  hasMiddlewares: () => mockHasMiddlewares(),
 }));
 
 import { vercelAdapter } from '@/adapters/vercel';
@@ -67,6 +69,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockIsRouteError.mockImplementation((obj: any) => 'error' in obj);
   mockRunMiddlewares.mockResolvedValue(true);
+  mockHasMiddlewares.mockReturnValue(true);
 });
 
 describe('vercelAdapter.createHandler()', () => {

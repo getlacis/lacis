@@ -46,13 +46,12 @@ export const netlifyAdapter: Adapter = {
 
       let responseBody = "";
       let responseHeaders: Record<string, string> = {};
-      let statusCode = 200;
       let headersSent = false;
 
       const rawRes = new ServerResponse(rawReq);
 
       rawRes.writeHead = function (status: number, headers?: any) {
-        statusCode = status;
+        rawRes.statusCode = status;
         if (headers) responseHeaders = { ...responseHeaders, ...headers };
         return this;
       };
@@ -96,7 +95,7 @@ export const netlifyAdapter: Adapter = {
         if (hasMiddlewares()) {
           const shouldContinue = await runMiddlewares("beforeRequest", req, res);
           if (shouldContinue === false || headersSent) {
-            return { statusCode: res.statusCode ?? statusCode, headers: responseHeaders, body: responseBody };
+            return { statusCode: res.statusCode, headers: responseHeaders, body: responseBody };
           }
         }
 
@@ -104,14 +103,14 @@ export const netlifyAdapter: Adapter = {
 
         if (hasMiddlewares()) await runMiddlewares("afterRequest", req, res);
 
-        return { statusCode: res.statusCode ?? statusCode, headers: responseHeaders, body: responseBody };
+        return { statusCode: res.statusCode, headers: responseHeaders, body: responseBody };
       } catch (error) {
         console.error("[zeno/netlify] Handler error:", error);
         if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
         if (!headersSent) {
           return { statusCode: 500, body: JSON.stringify({ error: "Internal server error" }) };
         }
-        return { statusCode: res.statusCode ?? 500, headers: responseHeaders, body: responseBody };
+        return { statusCode: res.statusCode, headers: responseHeaders, body: responseBody };
       }
     };
   },

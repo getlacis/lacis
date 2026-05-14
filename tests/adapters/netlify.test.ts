@@ -5,6 +5,7 @@ const mockFindRoute = jest.fn();
 const mockIsRouteError = jest.fn((obj: any) => "error" in obj);
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
 const mockRegisterMiddlewareConfig = jest.fn();
+const mockHasMiddlewares = jest.fn().mockReturnValue(true);
 
 jest.mock("@/core/router", () => ({
   registerRoutes: (...args: any[]) => mockRegisterRoutes(...args),
@@ -15,6 +16,7 @@ jest.mock("@/core/router", () => ({
 jest.mock("@/core/middleware", () => ({
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
   registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
+  hasMiddlewares: () => mockHasMiddlewares(),
 }));
 
 import { netlifyAdapter } from "@/adapters/netlify";
@@ -43,6 +45,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockIsRouteError.mockImplementation((obj: any) => "error" in obj);
   mockRunMiddlewares.mockResolvedValue(true);
+  mockHasMiddlewares.mockReturnValue(true);
 });
 
 describe("netlifyAdapter.createHandler()", () => {
@@ -168,13 +171,13 @@ describe("netlifyAdapter handler", () => {
     expect(capturedBody?.toString()).toBe('{"name":"zeno"}');
   });
 
-  it("makes the body parseable via req.bindJSON()", async () => {
+  it("makes the body parseable via req.json()", async () => {
     const handler = netlifyAdapter.createHandler({ routes: [] }) as Function;
     let parsed: any;
 
     mockFindRoute.mockReturnValue({
       handler: async (req: Request, res: Response) => {
-        parsed = await req.bindJSON();
+        parsed = await req.json();
         res.status(200).json({});
       },
       params: {},
@@ -232,6 +235,33 @@ describe("netlifyAdapter handler", () => {
 
     expect(result.statusCode).toBe(500);
     expect(JSON.parse(result.body)).toEqual({ error: "Internal server error" });
+  });
+
+  it("respects status set via res.status()", async () => {
+    const handler = netlifyAdapter.createHandler({ routes: [] }) as Function;
+    mockFindRoute.mockReturnValue(
+      makeRoute(async (_req, res) => {
+        res.status(201).json({ created: true });
+      }),
+    );
+
+    const result = await handler(event({ httpMethod: "POST" }), {});
+
+    expect(result.statusCode).toBe(201);
+  });
+
+  it("respects status set via writeHead", async () => {
+    const handler = netlifyAdapter.createHandler({ routes: [] }) as Function;
+    mockFindRoute.mockReturnValue(
+      makeRoute(async (_req, res) => {
+        res.writeHead(201, { "content-type": "text/plain" });
+        res.end("created");
+      }),
+    );
+
+    const result = await handler(event({ httpMethod: "POST" }), {});
+
+    expect(result.statusCode).toBe(201);
   });
 
   it("includes response headers in the result", async () => {

@@ -3,11 +3,13 @@ import https from 'https';
 import { IncomingMessage, ServerResponse } from 'http';
 import { Socket } from 'net';
 import type { Request, Response } from '@/types';
+import { applyRequestMethods, applyResponseMethods } from '@/utils/adapter-base';
 
 const mockLoadRoutes = jest.fn().mockResolvedValue(undefined);
 const mockFindRoute = jest.fn();
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
 const mockRegisterMiddlewareConfig = jest.fn();
+const mockHasMiddlewares = jest.fn().mockReturnValue(true);
 
 jest.mock('@/core/router', () => ({
   loadRoutes: (...args: any[]) => mockLoadRoutes(...args),
@@ -17,6 +19,7 @@ jest.mock('@/core/router', () => ({
 jest.mock('@/core/middleware', () => ({
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
   registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
+  hasMiddlewares: () => mockHasMiddlewares(),
 }));
 
 import { nodeAdapter } from '@/adapters/node';
@@ -45,8 +48,10 @@ function makeReqRes(url = '/users', method = 'GET') {
   const req = new IncomingMessage(new Socket()) as Request;
   req.url = url;
   req.method = method;
+  applyRequestMethods(req);
 
   const rawRes = new ServerResponse(req);
+  applyResponseMethods(rawRes);
 
   let _headersSent = false;
   Object.defineProperty(rawRes, 'headersSent', {
@@ -57,8 +62,10 @@ function makeReqRes(url = '/users', method = 'GET') {
   let resolveEnd!: () => void;
   const ended = new Promise<void>(resolve => { resolveEnd = resolve; });
 
-  (rawRes as any).end = function (_data?: any) {
+  const originalEnd = (rawRes as any).end.bind(rawRes);
+  (rawRes as any).end = function (data?: any) {
     _headersSent = true;
+    originalEnd(data);
     resolveEnd();
     return this;
   };
@@ -69,8 +76,8 @@ function makeReqRes(url = '/users', method = 'GET') {
 // Starts the adapter and captures the HTTP requestListener.
 async function startAndCapture(config = baseConfig as any) {
   let capturedListener: (req: any, res: any) => void = () => {};
-  const httpSpy = jest.spyOn(http, 'createServer').mockImplementation((listener: any) => {
-    capturedListener = listener;
+  const httpSpy = jest.spyOn(http, 'createServer').mockImplementation((...args: any[]) => {
+    capturedListener = typeof args[0] === 'function' ? args[0] : args[1];
     return makeMockServer() as any;
   });
   const handler = nodeAdapter.createHandler('routes');
@@ -81,6 +88,7 @@ async function startAndCapture(config = baseConfig as any) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockRunMiddlewares.mockResolvedValue(true);
+  mockHasMiddlewares.mockReturnValue(true);
   mockFindRoute.mockReturnValue(null);
 });
 
@@ -114,7 +122,7 @@ describe('nodeAdapter — HTTP vs HTTPS', () => {
     const httpsOptions = { cert: 'cert', key: 'key' };
     await (handler as Function)({ ...baseConfig, httpsOptions });
     expect(httpsSpy).toHaveBeenCalledTimes(1);
-    expect(httpsSpy).toHaveBeenCalledWith(httpsOptions, expect.any(Function));
+    expect(httpsSpy).toHaveBeenCalledWith(expect.objectContaining(httpsOptions), expect.any(Function));
     expect(httpSpy).not.toHaveBeenCalled();
   });
 });

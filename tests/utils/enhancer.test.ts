@@ -1,9 +1,17 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { Socket } from 'net';
-import { enhanceRequest, enhanceResponse } from '@/utils/enhancer';
+import { withRequestMethods, withResponseMethods, nodeBody } from '@/utils/adapter-base';
 
-function makeReq(body?: string | Buffer, headers?: Record<string, string>): IncomingMessage {
-  const req = new IncomingMessage(new Socket());
+class _TestReqBase extends IncomingMessage {
+  params: Record<string, string> = {};
+  body = nodeBody;
+}
+class TestRequest extends withRequestMethods(_TestReqBase) {}
+
+class TestResponse extends withResponseMethods(ServerResponse<IncomingMessage>) {}
+
+function makeReq(body?: string | Buffer, headers?: Record<string, string>): TestRequest {
+  const req = new TestRequest(new Socket());
   if (headers) {
     (req as any).headers = { ...headers };
   }
@@ -16,8 +24,8 @@ function makeReq(body?: string | Buffer, headers?: Record<string, string>): Inco
   return req;
 }
 
-function makeRes(): ServerResponse {
-  return new ServerResponse(new IncomingMessage(new Socket()));
+function makeRes(): TestResponse {
+  return new TestResponse(new IncomingMessage(new Socket()));
 }
 
 function buildMultipart(boundary: string, parts: Array<{
@@ -47,58 +55,51 @@ function buildMultipart(boundary: string, parts: Array<{
   return Buffer.concat(chunks);
 }
 
-describe('enhanceRequest', () => {
+describe('withRequestMethods', () => {
   describe('body()', () => {
     it('collects all chunks into a single Buffer', async () => {
       const req = makeReq('hello world');
-      const enhanced = enhanceRequest(req);
-      const buf = await enhanced.body();
+      const buf = await req.body();
       expect(buf.toString()).toBe('hello world');
     });
 
     it('resolves to an empty buffer when the body is empty', async () => {
       const req = makeReq('');
-      const enhanced = enhanceRequest(req);
-      const buf = await enhanced.body();
+      const buf = await req.body();
       expect(buf.length).toBe(0);
     });
 
     it('rejects with code 413 when the body exceeds 10 MB', async () => {
-      const req = new IncomingMessage(new Socket());
+      const req = new TestRequest(new Socket());
       const large = Buffer.alloc(10_485_761, 'x'); // 10 MB + 1 byte
       process.nextTick(() => {
         req.push(large);
         req.push(null);
       });
-
-      const enhanced = enhanceRequest(req);
-      await expect(enhanced.body()).rejects.toMatchObject({ code: 413 });
+      await expect(req.body()).rejects.toMatchObject({ code: 413 });
     });
   });
 
-  describe('bindJSON()', () => {
+  describe('json()', () => {
     it('parses a valid JSON body', async () => {
       const payload = { name: 'zeno', version: 1 };
       const req = makeReq(JSON.stringify(payload), { 'content-type': 'application/json' });
-      const enhanced = enhanceRequest(req);
-      const data = await enhanced.bindJSON<typeof payload>();
+      const data = await req.json<typeof payload>();
       expect(data).toEqual(payload);
     });
 
     it('rejects on malformed JSON', async () => {
       const req = makeReq('{invalid json}', { 'content-type': 'application/json' });
-      const enhanced = enhanceRequest(req);
-      await expect(enhanced.bindJSON()).rejects.toThrow();
+      await expect(req.json()).rejects.toThrow();
     });
   });
 
-  describe('bindForm()', () => {
+  describe('form()', () => {
     it('parses a single text field', async () => {
       const boundary = 'testboundary';
       const body = buildMultipart(boundary, [{ name: 'username', value: 'lycia' }]);
       const req = makeReq(body, { 'content-type': `multipart/form-data; boundary=${boundary}` });
-      const enhanced = enhanceRequest(req);
-      const data = await enhanced.bindForm<{ username: string }>();
+      const data = await req.form<{ username: string }>();
       expect(data).toEqual({ username: 'lycia' });
     });
 
@@ -110,8 +111,7 @@ describe('enhanceRequest', () => {
         { name: 'age', value: '30' },
       ]);
       const req = makeReq(body, { 'content-type': `multipart/form-data; boundary=${boundary}` });
-      const enhanced = enhanceRequest(req);
-      const data = await enhanced.bindForm<Record<string, string>>();
+      const data = await req.form<Record<string, string>>();
       expect(data).toEqual({ firstName: 'Lycia', lastName: 'Dufour', age: '30' });
     });
 
@@ -125,8 +125,7 @@ describe('enhanceRequest', () => {
         data: fileContent,
       }]);
       const req = makeReq(body, { 'content-type': `multipart/form-data; boundary=${boundary}` });
-      const enhanced = enhanceRequest(req);
-      const data = await enhanced.bindForm<{
+      const data = await req.form<{
         avatar: { filename: string; mimetype: string; data: Buffer; size: number };
       }>();
       expect(data.avatar.filename).toBe('avatar.png');
@@ -143,8 +142,7 @@ describe('enhanceRequest', () => {
         { name: 'file', filename: 'doc.txt', contentType: 'text/plain', data: fileContent },
       ]);
       const req = makeReq(body, { 'content-type': `multipart/form-data; boundary=${boundary}` });
-      const enhanced = enhanceRequest(req);
-      const data = await enhanced.bindForm<any>();
+      const data = await req.form<{ title: string; file: { filename: string; size: number } }>();
       expect(data.title).toBe('my upload');
       expect(data.file.filename).toBe('doc.txt');
       expect(data.file.size).toBe(fileContent.length);
@@ -152,41 +150,36 @@ describe('enhanceRequest', () => {
 
     it('rejects when content-type is not multipart/form-data', async () => {
       const req = makeReq('some body', { 'content-type': 'application/json' });
-      const enhanced = enhanceRequest(req);
-      await expect(enhanced.bindForm()).rejects.toThrow('Content-Type is not multipart/form-data');
+      await expect(req.form()).rejects.toThrow('Content-Type is not multipart/form-data');
     });
 
     it('rejects when boundary is missing from content-type', async () => {
       const req = makeReq('some body', { 'content-type': 'multipart/form-data' });
-      const enhanced = enhanceRequest(req);
-      await expect(enhanced.bindForm()).rejects.toThrow('Boundary not found');
+      await expect(req.form()).rejects.toThrow('Boundary not found');
     });
   });
 });
 
-describe('enhanceResponse', () => {
+describe('withResponseMethods', () => {
   describe('status()', () => {
     it('sets statusCode and returns the response for chaining', () => {
       const res = makeRes();
-      const enhanced = enhanceResponse(res);
-      const returned = enhanced.status(201);
+      const returned = res.status(201);
       expect(res.statusCode).toBe(201);
-      expect(returned).toBe(enhanced);
+      expect(returned).toBe(res);
     });
   });
 
   describe('json()', () => {
     it('sets Content-Type to application/json', () => {
       const res = makeRes();
-      const enhanced = enhanceResponse(res);
-      enhanced.json({ ok: true });
+      res.json({ ok: true });
       expect(res.getHeader('Content-Type')).toBe('application/json');
     });
 
     it('works when chained after status()', () => {
       const res = makeRes();
-      const enhanced = enhanceResponse(res);
-      enhanced.status(422).json({ error: 'bad input' });
+      res.status(422).json({ error: 'bad input' });
       expect(res.statusCode).toBe(422);
       expect(res.getHeader('Content-Type')).toBe('application/json');
     });
@@ -195,15 +188,13 @@ describe('enhanceResponse', () => {
   describe('send()', () => {
     it('sets Content-Type to text/plain for strings', () => {
       const res = makeRes();
-      const enhanced = enhanceResponse(res);
-      enhanced.send('hello');
+      res.send('hello');
       expect(res.getHeader('Content-Type')).toBe('text/plain');
     });
 
     it('falls through to json() for non-string values', () => {
       const res = makeRes();
-      const enhanced = enhanceResponse(res);
-      enhanced.send({ data: 42 });
+      res.send({ data: 42 });
       expect(res.getHeader('Content-Type')).toBe('application/json');
     });
   });
