@@ -1,5 +1,5 @@
-import { IncomingMessage, ServerResponse } from "http";
 import type { MiddlewareCallback } from "./middleware";
+import type { Request, Response } from "./http";
 
 interface CorsConfig {
   origin?: string | string[] | RegExp | ((origin: string) => boolean);
@@ -10,20 +10,7 @@ interface CorsConfig {
   maxAge?: number;
 }
 
-type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-
-// Handler for each HTTP method, need to be modified to give extra parameters and functionality
-type GetHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-type PostHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-type PutHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-type DeleteHandler = (
-  req: IncomingMessage,
-  res: ServerResponse
-) => Promise<void>;
-type PatchHandler = (
-  req: IncomingMessage,
-  res: ServerResponse
-) => Promise<void>;
+type Handler = (req: Request, res: Response) => Promise<void>;
 
 type RouteHandlers = {
   GET?: Handler;
