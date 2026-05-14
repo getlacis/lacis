@@ -125,17 +125,14 @@ describe('createRateLimit — enforcement', () => {
   });
 
   it('resets the counter after windowMs has elapsed', () => {
-    const spy = jest.spyOn(Date, 'now').mockReturnValue(0);
     const mw = createRateLimit({ max: 1, windowMs: 5_000 });
     const req = makeReq({ headers: { 'x-forwarded-for': 'A' } });
 
     mw(req, makeRes());
     expect(mw(req, makeRes())).toBe(false); // window not expired
 
-    spy.mockReturnValue(5_001);
+    dateSpy.mockReturnValue(5_001);
     expect(mw(req, makeRes())).not.toBe(false); // new window
-
-    spy.mockRestore();
   });
 });
 

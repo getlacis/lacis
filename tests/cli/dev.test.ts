@@ -29,6 +29,8 @@ const ROUTES = '/fake/routes';
 let cwdSpy: jest.SpyInstance;
 let processSpy: jest.SpyInstance;
 let consoleSpy: jest.SpyInstance;
+let originalVercel: string | undefined;
+let originalNetlify: string | undefined;
 
 beforeEach(() => {
   mockGenerateManifest.mockClear();
@@ -41,6 +43,8 @@ beforeEach(() => {
   processSpy = jest.spyOn(process, 'on').mockImplementation(jest.fn() as any);
   consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
+  originalVercel = process.env.VERCEL;
+  originalNetlify = process.env.NETLIFY;
   delete process.env.VERCEL;
   delete process.env.NETLIFY;
 });
@@ -50,6 +54,11 @@ afterEach(() => {
   processSpy.mockRestore();
   consoleSpy.mockRestore();
   jest.clearAllMocks();
+
+  if (originalVercel !== undefined) process.env.VERCEL = originalVercel;
+  else delete process.env.VERCEL;
+  if (originalNetlify !== undefined) process.env.NETLIFY = originalNetlify;
+  else delete process.env.NETLIFY;
 });
 
 describe('dev — VERCEL=1 environment', () => {

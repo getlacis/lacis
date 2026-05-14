@@ -1,41 +1,46 @@
-import { router, findRoute } from '@/core/router';
+import { router, findRoute, resetRouter } from '@/core/router';
 
-const P = '/tst-cache';
+beforeEach(() => resetRouter());
+
+const CACHE_MAX = 1000;
+const CACHE_EVICT = 100;
 
 describe('Router cache eviction', () => {
-  it('evicts the oldest entry (FIFO) when the cache is full', () => {
-    // Fill the cache up to its limit (1000) using unique paths
-    for (let i = 0; i < 1000; i++) {
-      router.addRoute('GET', `${P}/fill-${i}`, () => {});
+  it('evicts the oldest entries (FIFO batch) when the cache overflows', () => {
+    for (let i = 0; i < CACHE_MAX + 1; i++) {
+      router.addRoute('GET', `/r/${i}`, () => {});
     }
 
-    // Warm the cache for a known early entry
-    const firstKey = `${P}/fill-0`;
-    findRoute(firstKey, 'GET'); // populates cache for fill-0
+    // Warm the cache with the first CACHE_MAX entries (insertion order: 0…999)
+    for (let i = 0; i < CACHE_MAX; i++) {
+      findRoute(`/r/${i}`, 'GET');
+    }
 
-    // Record cache size before overflow
-    const stats = (router as any).cachedRoutes;
-
-    // Trigger one more lookup on a new route — this should evict fill-0
-    router.addRoute('GET', `${P}/overflow`, () => {});
-    findRoute(`${P}/overflow`, 'GET');
-    findRoute(`${P}/fill-1`, 'GET'); // ensure cache is at capacity
-
-    // The router's internal cache uses Map insertion order for eviction.
-    // Adding a new entry when size >= 1000 deletes the first inserted key.
-    // We can't inspect the internal Map directly, but we can verify the
-    // cache size never exceeds the limit.
     const internalCache: Map<string, unknown> = (router as any).cachedRoutes;
-    expect(internalCache.size).toBeLessThanOrEqual(1000);
+    expect(internalCache.size).toBe(CACHE_MAX);
+
+    // One more lookup triggers eviction: oldest CACHE_EVICT entries are deleted
+    findRoute(`/r/${CACHE_MAX}`, 'GET');
+
+    // The CACHE_EVICT oldest keys (0…CACHE_EVICT-1) should be gone
+    for (let i = 0; i < CACHE_EVICT; i++) {
+      expect(internalCache.has(`GET:/r/${i}`)).toBe(false);
+    }
+
+    // Entries that were inserted later should still be present
+    expect(internalCache.has(`GET:/r/${CACHE_EVICT}`)).toBe(true);
+    expect(internalCache.size).toBe(CACHE_MAX - CACHE_EVICT + 1);
   });
 
   it('cache size stays bounded under sustained load', () => {
-    for (let i = 0; i < 1500; i++) {
-      router.addRoute('GET', `${P}/load-${i}`, () => {});
-      findRoute(`${P}/load-${i}`, 'GET');
+    for (let i = 0; i < CACHE_MAX + 500; i++) {
+      router.addRoute('GET', `/load/${i}`, () => {});
+    }
+    for (let i = 0; i < CACHE_MAX + 500; i++) {
+      findRoute(`/load/${i}`, 'GET');
     }
 
     const internalCache: Map<string, unknown> = (router as any).cachedRoutes;
-    expect(internalCache.size).toBeLessThanOrEqual(1000);
+    expect(internalCache.size).toBeLessThanOrEqual(CACHE_MAX);
   });
 });

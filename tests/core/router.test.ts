@@ -1,15 +1,14 @@
-import { router, findRoute, isRouteError, getRouterStats } from '@/core/router';
+import { router, findRoute, isRouteError, getRouterStats, resetRouter } from '@/core/router';
 
-// Unique prefix per test file to avoid singleton conflicts
-const P = '/tst-router';
+beforeEach(() => resetRouter());
 
 describe('Router', () => {
   describe('static routes', () => {
     it('finds a registered GET route', () => {
       const handler = jest.fn();
-      router.addRoute('GET', `${P}/hello`, handler);
+      router.addRoute('GET', '/hello', handler);
 
-      const result = findRoute(`${P}/hello`, 'GET');
+      const result = findRoute('/hello', 'GET');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(false);
       const route = result as { handler: Function; params: Record<string, string> };
@@ -18,13 +17,13 @@ describe('Router', () => {
     });
 
     it('returns null for an unregistered path', () => {
-      expect(findRoute(`${P}/does-not-exist`, 'GET')).toBeNull();
+      expect(findRoute('/does-not-exist', 'GET')).toBeNull();
     });
 
     it('trailing slashes are normalised', () => {
       const handler = jest.fn();
-      router.addRoute('GET', `${P}/slash`, handler);
-      const result = findRoute(`${P}/slash/`, 'GET');
+      router.addRoute('GET', '/slash', handler);
+      const result = findRoute('/slash/', 'GET');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(false);
     });
@@ -33,9 +32,9 @@ describe('Router', () => {
   describe('dynamic routes', () => {
     it('extracts a single param', () => {
       const handler = jest.fn();
-      router.addRoute('GET', `${P}/users/[id]`, handler);
+      router.addRoute('GET', '/users/[id]', handler);
 
-      const result = findRoute(`${P}/users/123`, 'GET');
+      const result = findRoute('/users/123', 'GET');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(false);
       const route = result as { handler: Function; params: Record<string, string> };
@@ -46,10 +45,10 @@ describe('Router', () => {
     it('static segment wins over param when both match', () => {
       const staticHandler = jest.fn();
       const paramHandler = jest.fn();
-      router.addRoute('GET', `${P}/items/featured`, staticHandler);
-      router.addRoute('GET', `${P}/items/[id]`, paramHandler);
+      router.addRoute('GET', '/items/featured', staticHandler);
+      router.addRoute('GET', '/items/[id]', paramHandler);
 
-      const result = findRoute(`${P}/items/featured`, 'GET');
+      const result = findRoute('/items/featured', 'GET');
       expect(result).not.toBeNull();
       const route = result as { handler: Function; params: Record<string, string> };
       expect(route.handler).toBe(staticHandler);
@@ -58,9 +57,9 @@ describe('Router', () => {
 
   describe('method handling', () => {
     it('returns a 405 RouteError when method is not allowed', () => {
-      router.addRoute('POST', `${P}/post-only`, jest.fn());
+      router.addRoute('POST', '/post-only', jest.fn());
 
-      const result = findRoute(`${P}/post-only`, 'GET');
+      const result = findRoute('/post-only', 'GET');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(true);
       const err = result as { error: string; status: number; allowedMethods: string[] };
@@ -70,9 +69,9 @@ describe('Router', () => {
 
     it('HEAD falls back to the GET handler', () => {
       const handler = jest.fn();
-      router.addRoute('GET', `${P}/head-test`, handler);
+      router.addRoute('GET', '/head-test', handler);
 
-      const result = findRoute(`${P}/head-test`, 'HEAD');
+      const result = findRoute('/head-test', 'HEAD');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(false);
       const route = result as { handler: Function; params: Record<string, string> };
@@ -81,9 +80,9 @@ describe('Router', () => {
 
     it('method defaults to GET when not provided', () => {
       const handler = jest.fn();
-      router.addRoute('GET', `${P}/default-method`, handler);
+      router.addRoute('GET', '/default-method', handler);
 
-      const result = findRoute(`${P}/default-method`);
+      const result = findRoute('/default-method');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(false);
     });
@@ -92,9 +91,9 @@ describe('Router', () => {
   describe('wildcard routes', () => {
     it('matches and captures the wildcard segment', () => {
       const handler = jest.fn();
-      router.addRoute('GET', `${P}/assets/*`, handler);
+      router.addRoute('GET', '/assets/*', handler);
 
-      const result = findRoute(`${P}/assets/img/logo.png`, 'GET');
+      const result = findRoute('/assets/img/logo.png', 'GET');
       expect(result).not.toBeNull();
       expect(isRouteError(result!)).toBe(false);
       const route = result as { handler: Function; params: Record<string, string> };
@@ -104,9 +103,14 @@ describe('Router', () => {
   });
 
   describe('getRouterStats', () => {
-    it('returns a routeCount greater than zero after routes are added', () => {
-      const stats = getRouterStats();
-      expect(stats.routeCount).toBeGreaterThan(0);
+    it('returns routeCount=0 after reset', () => {
+      expect(getRouterStats().routeCount).toBe(0);
+    });
+
+    it('returns a routeCount matching registered routes', () => {
+      router.addRoute('GET', '/a', jest.fn());
+      router.addRoute('POST', '/b', jest.fn());
+      expect(getRouterStats().routeCount).toBe(2);
     });
   });
 });
