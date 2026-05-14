@@ -1,8 +1,7 @@
-import type { Adapter, ServerlessConfig, VercelRequest, VercelResponse } from "@/types";
+import type { Adapter, ServerlessConfig, VercelRequest, VercelResponse, Request, Response } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
-import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
-import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { IncomingMessage, ServerResponse } from "http";
+import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
+import { applyRequestMethods, applyResponseMethods } from "@/utils/adapter-base";
 
 export const vercelAdapter: Adapter = {
   name: "vercel",
@@ -25,37 +24,44 @@ export const vercelAdapter: Adapter = {
       return initPromise;
     };
 
-    return async (req: VercelRequest, res: VercelResponse) => {
+    return async (vercelReq: VercelRequest, vercelRes: VercelResponse) => {
       await init();
 
-      const enhancedReq = enhanceRequest(req as unknown as IncomingMessage);
-      const enhancedRes = enhanceResponse(res as unknown as ServerResponse);
+      applyRequestMethods(vercelReq);
+      applyResponseMethods(vercelRes);
+
+      // Single cast: Vercel's types omit the zeno-specific methods we just applied
+      const req = vercelReq as unknown as Request;
+      const res = vercelRes as unknown as Response;
 
       const route = findRoute(req.url ?? "/", req.method ?? "GET");
 
       if (!route) {
-        enhancedRes.status(404).json({ error: "Route not found" });
+        res.status(404).json({ error: "Route not found" });
         return;
       }
 
       if (isRouteError(route)) {
-        enhancedRes.status(route.status ?? 500).json({ error: route.error });
+        res.status(route.status ?? 500).json({ error: route.error });
         return;
       }
 
-      enhancedReq.params = route.params;
+      req.params = route.params;
 
       try {
-        const shouldContinue = await runMiddlewares("beforeRequest", enhancedReq, enhancedRes);
-        if (shouldContinue === false || enhancedRes.headersSent) return;
+        if (hasMiddlewares()) {
+          const shouldContinue = await runMiddlewares("beforeRequest", req, res);
+          if (shouldContinue === false || res.headersSent) return;
+        }
 
-        await route.handler(enhancedReq, enhancedRes);
-        await runMiddlewares("afterRequest", enhancedReq, enhancedRes);
+        await route.handler(req, res);
+
+        if (hasMiddlewares()) await runMiddlewares("afterRequest", req, res);
       } catch (error) {
         console.error("[zeno/vercel] Handler error:", error);
-        await runMiddlewares("onError", enhancedReq, enhancedRes, { error });
-        if (!enhancedRes.headersSent) {
-          enhancedRes.status(500).json({ error: "Internal server error" });
+        if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Internal server error" });
         }
       }
     };

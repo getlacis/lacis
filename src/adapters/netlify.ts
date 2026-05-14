@@ -1,7 +1,7 @@
-import type { Adapter, ServerlessConfig, NetlifyEvent, NetlifyContext } from "@/types";
+import type { Adapter, ServerlessConfig, NetlifyEvent, NetlifyContext, Request, Response } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
-import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
-import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
+import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
+import { applyRequestMethods, applyResponseMethods } from "@/utils/adapter-base";
 import { IncomingMessage, ServerResponse } from "http";
 import { Socket } from "net";
 
@@ -34,8 +34,6 @@ export const netlifyAdapter: Adapter = {
         : "";
       const url = event.path + qs;
 
-      // Build a proper IncomingMessage with the body pushed into the stream
-      // so that req.body(), req.bindJSON(), req.bindForm() all work correctly.
       const rawReq = new IncomingMessage(new Socket());
       rawReq.url = url;
       rawReq.method = event.httpMethod;
@@ -53,7 +51,6 @@ export const netlifyAdapter: Adapter = {
 
       const rawRes = new ServerResponse(rawReq);
 
-      // Capture writeHead/setHeader/end without writing to a real socket
       rawRes.writeHead = function (status: number, headers?: any) {
         statusCode = status;
         if (headers) responseHeaders = { ...responseHeaders, ...headers };
@@ -73,8 +70,12 @@ export const netlifyAdapter: Adapter = {
       };
       Object.defineProperty(rawRes, "headersSent", { get: () => headersSent });
 
-      const req = enhanceRequest(rawReq);
-      const res = enhanceResponse(rawRes);
+      applyRequestMethods(rawReq);
+      applyResponseMethods(rawRes);
+
+      // Single cast: IncomingMessage/ServerResponse don't know about the zeno methods we just applied
+      const req = rawReq as unknown as Request;
+      const res = rawRes as unknown as Response;
 
       const route = findRoute(event.path, event.httpMethod);
 
@@ -92,18 +93,21 @@ export const netlifyAdapter: Adapter = {
       req.params = route.params;
 
       try {
-        const shouldContinue = await runMiddlewares("beforeRequest", req, res);
-        if (shouldContinue === false || headersSent) {
-          return { statusCode: res.statusCode ?? statusCode, headers: responseHeaders, body: responseBody };
+        if (hasMiddlewares()) {
+          const shouldContinue = await runMiddlewares("beforeRequest", req, res);
+          if (shouldContinue === false || headersSent) {
+            return { statusCode: res.statusCode ?? statusCode, headers: responseHeaders, body: responseBody };
+          }
         }
 
         await route.handler(req, res);
-        await runMiddlewares("afterRequest", req, res);
+
+        if (hasMiddlewares()) await runMiddlewares("afterRequest", req, res);
 
         return { statusCode: res.statusCode ?? statusCode, headers: responseHeaders, body: responseBody };
       } catch (error) {
         console.error("[zeno/netlify] Handler error:", error);
-        await runMiddlewares("onError", req, res, { error });
+        if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
         if (!headersSent) {
           return { statusCode: 500, body: JSON.stringify({ error: "Internal server error" }) };
         }

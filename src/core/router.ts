@@ -158,7 +158,11 @@ class Router {
     
     if (result) {
       if (this.cachedRoutes.size >= 1000) {
-        this.cachedRoutes.delete(this.cachedRoutes.keys().next().value!);
+        let evicted = 0;
+        for (const key of this.cachedRoutes.keys()) {
+          this.cachedRoutes.delete(key);
+          if (++evicted >= 100) break;
+        }
       }
       this.cachedRoutes.set(cacheKey, result);
     }

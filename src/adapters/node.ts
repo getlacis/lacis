@@ -1,26 +1,43 @@
-import http from "http";
-import https from "https";
-import cluster from "cluster";
-import os from "os";
+import {
+  hasMiddlewares,
+  registerMiddlewareConfig,
+  runMiddlewares,
+} from "@/core/middleware";
+import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
-import { loadRoutes, findRoute } from "@/core/router";
-import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
+import {
+  nodeBody,
+  withRequestMethods,
+  withResponseMethods,
+} from "@/utils/adapter-base";
 import { primaryLog } from "@/utils/logs";
 import { getMonitor } from "@/utils/monitor";
+import cluster from "cluster";
+import http from "http";
+import https from "https";
+import os from "os";
+
+class _ZenoRequestBase extends http.IncomingMessage {
+  params: Record<string, string> = {};
+  body = nodeBody;
+}
+
+class ZenoRequest extends withRequestMethods(_ZenoRequestBase) {}
+
+class ZenoResponse extends withResponseMethods(
+  http.ServerResponse<ZenoRequest>,
+) {}
 
 export const nodeAdapter: Adapter = {
   name: "node",
   createHandler: (config: string | ServerlessConfig) => {
     if (typeof config !== "string") {
-      throw new Error("nodeAdapter requires a routesDir string, not a ServerlessConfig.");
+      throw new Error(
+        "nodeAdapter requires a routesDir string, not a ServerlessConfig.",
+      );
     }
 
-    const routeCache = new Map();
-    const MAX_ROUTE_CACHE = 1000;
     const routesDir = config;
-    const transformRequest = nodeAdapter.transformRequest!;
-    const transformResponse = nodeAdapter.transformResponse!;
 
     return async (config: ServerConfig = {}) => {
       const {
@@ -79,7 +96,7 @@ export const nodeAdapter: Adapter = {
           primaryLog(
             `Worker ${worker.process.pid} died (${
               signal || code
-            }). Restarting...`
+            }). Restarting...`,
           );
           setTimeout(() => {
             cluster.fork();
@@ -102,9 +119,73 @@ export const nodeAdapter: Adapter = {
         await loadRoutes(routesDir);
         registerMiddlewareConfig(config.middleware);
 
+        const handleRequest = async (
+          req: ZenoRequest,
+          res: ZenoResponse,
+          requestTracker: any,
+        ) => {
+          try {
+            if (isDev && performanceMonitor && req.url === "/health") {
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify(performanceMonitor.getHealthMetrics()));
+              requestTracker?.end(200);
+              return;
+            }
+
+            const rawUrl = req.url || "/";
+            const qIdx = rawUrl.indexOf("?");
+            const pathname = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
+            const route = findRoute(pathname, req.method || "GET");
+
+            if (!route) {
+              if (hasMiddlewares())
+                await runMiddlewares("onError", req as any, res as any);
+              res.status(404).json({ error: "Route not found" });
+              requestTracker?.end(404);
+              return;
+            }
+
+            if ("error" in route) {
+              const status = route.status || 500;
+              res.status(status).json({ error: route.error });
+              requestTracker?.end(status, true);
+              return;
+            }
+
+            if (hasMiddlewares()) {
+              const ok = await runMiddlewares(
+                "beforeRequest",
+                req as any,
+                res as any,
+              );
+              if (ok === false || res.headersSent) {
+                requestTracker?.end(res.statusCode || 400);
+                return;
+              }
+            }
+
+            req.params = route.params;
+            await route.handler(req as any, res as any);
+
+            if (hasMiddlewares()) {
+              await runMiddlewares("afterRequest", req as any, res as any);
+            }
+
+            if (!res.headersSent) res.end();
+            requestTracker?.end(res.statusCode || 200);
+          } catch (error) {
+            if (isDev) console.error("Error:", error);
+            if (!res.headersSent)
+              res.status(500).json({ error: "Internal Server Error" });
+            if (hasMiddlewares())
+              await runMiddlewares("onError", req as any, res as any);
+            requestTracker?.end(res.statusCode || 500, true);
+          }
+        };
+
         const requestListener = (
           req: http.IncomingMessage,
-          res: http.ServerResponse
+          res: http.ServerResponse,
         ) => {
           const requestTracker =
             isDev && performanceMonitor
@@ -117,107 +198,31 @@ export const nodeAdapter: Adapter = {
             }
           }
 
-          const handleRequest = async () => {
-            const enhancedReq = transformRequest(req);
-            const enhancedRes = transformResponse(res);
-
-            try {
-              if (
-                isDev &&
-                performanceMonitor &&
-                enhancedReq.url === "/health"
-              ) {
-                enhancedRes.setHeader("Content-Type", "application/json");
-                enhancedRes.end(
-                  JSON.stringify(performanceMonitor.getHealthMetrics())
-                );
-                requestTracker?.end(200);
-                return;
-              }
-
-              const cacheKey = `${enhancedReq.method}:${enhancedReq.url}`;
-              let route = routeCache.get(cacheKey);
-
-              if (!route) {
-                route = findRoute(
-                  enhancedReq.url || "/",
-                  enhancedReq.method || "GET"
-                );
-
-                if (route) {
-                  if (routeCache.size >= MAX_ROUTE_CACHE) {
-                    routeCache.delete(routeCache.keys().next().value!);
-                  }
-                  routeCache.set(cacheKey, route);
-                }
-              }
-
-              if (!route) {
-                await runMiddlewares("onError", enhancedReq, enhancedRes);
-                enhancedRes.status(404).json({ error: "Route not found" });
-                requestTracker?.end(404);
-                return;
-              }
-
-              if ("error" in route) {
-                const status = route.status || 500;
-                enhancedRes.status(status).json({ error: route.error });
-                requestTracker?.end(status, true);
-                return;
-              }
-
-              const middlewaresResult = await runMiddlewares(
-                "beforeRequest",
-                enhancedReq,
-                enhancedRes
-              );
-              if (middlewaresResult === false || enhancedRes.headersSent) {
-                requestTracker?.end(enhancedRes.statusCode || 400);
-                return;
-              }
-
-              enhancedReq.params = route.params;
-
-              await route.handler(enhancedReq, enhancedRes);
-              await runMiddlewares("afterRequest", enhancedReq, enhancedRes);
-
-              if (!enhancedRes.headersSent) {
-                enhancedRes.end();
-              }
-
-              requestTracker?.end(enhancedRes.statusCode || 200);
-            } catch (error) {
-              if (isDev) {
-                console.error("Error:", error);
-              }
-
-              if (!enhancedRes.headersSent) {
-                enhancedRes
-                  .status(500)
-                  .json({ error: "Internal Server Error" });
-              }
-
-              await runMiddlewares("onError", enhancedReq, enhancedRes);
-              requestTracker?.end(enhancedRes.statusCode || 500, true);
-            }
-          };
-
-          handleRequest().catch((err) => {
-            if (isDev) {
-              console.error("Fatal error:", err);
-            }
+          handleRequest(
+            req as unknown as ZenoRequest,
+            res as unknown as ZenoResponse,
+            requestTracker,
+          ).catch((err) => {
+            if (isDev) console.error("Fatal error:", err);
             if (!res.headersSent) {
               res.statusCode = 500;
               res.end("Server Error");
             }
-
             requestTracker?.end(500, true);
           });
         };
 
+        // http.createServer accepts custom IncomingMessage/ServerResponse subclasses so Node instantiates our versions per request
+        const serverOptions = {
+          IncomingMessage: ZenoRequest,
+          ServerResponse: ZenoResponse,
+        } as any;
         const server = config.httpsOptions
-          ? https.createServer(config.httpsOptions, requestListener)
-          : http.createServer(requestListener);
+          ? https.createServer(
+              { ...serverOptions, ...config.httpsOptions },
+              requestListener as any,
+            )
+          : http.createServer(serverOptions, requestListener);
 
         const protocol = config.httpsOptions ? "https" : "http";
 
@@ -225,11 +230,11 @@ export const nodeAdapter: Adapter = {
           if (cluster.isPrimary || !clusterConfig?.enabled) {
             primaryLog(
               `🚀 Server running at ${protocol}://localhost:${port}/` +
-                (isDev ? " (dev)" : "")
+                (isDev ? " (dev)" : ""),
             );
             if (isDev && performanceMonitor) {
               primaryLog(
-                `📊 Performance monitoring available at http://localhost:${port}/health`
+                `📊 Performance monitoring available at http://localhost:${port}/health`,
               );
             }
           } else if (isDev) {
@@ -243,6 +248,4 @@ export const nodeAdapter: Adapter = {
       return null;
     };
   },
-  transformRequest: (req) => enhanceRequest(req),
-  transformResponse: (res) => enhanceResponse(res),
 };

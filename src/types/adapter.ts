@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, Request, Response, RouteHandlers } from ".";
+import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, RouteHandlers } from ".";
 import type { MiddlewareCallback } from "./middleware";
 
 interface AdapterRequest extends IncomingMessage {
   params?: Record<string, string>;
   query?: Record<string, string>;
-  body?: any;
+  body?(): Promise<Buffer>;
   createSSEClient(
     options?: SSEClientOptions,
     handlers?: SSEEventHandlers
@@ -39,8 +39,6 @@ interface ServerlessConfig {
 interface Adapter {
   name: string;
   createHandler: (config: string | ServerlessConfig) => unknown;
-  transformRequest?: (req: any) => Request;
-  transformResponse?: (res: any) => Response;
 }
 
 export type {

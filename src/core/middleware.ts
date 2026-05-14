@@ -100,6 +100,15 @@ function collectMiddleware(url: string) {
   return result;
 }
 
+function hasMiddlewares(): boolean {
+  if (
+    globalMiddlewares.beforeRequest.length > 0 ||
+    globalMiddlewares.afterRequest.length > 0 ||
+    globalMiddlewares.onError.length > 0
+  ) return true;
+  return pathMiddlewares.size > 0;
+}
+
 async function runMiddlewares(
   middlewareName: MiddlewareType,
   req: Request,
@@ -235,4 +244,5 @@ export {
   collectMiddleware,
   resetMiddlewares,
   registerMiddlewareConfig,
+  hasMiddlewares,
 };

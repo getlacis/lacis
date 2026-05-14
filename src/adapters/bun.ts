@@ -1,28 +1,147 @@
+import {
+  hasMiddlewares,
+  registerMiddlewareConfig,
+  runMiddlewares,
+} from "@/core/middleware";
+import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
-import type { Server } from "bun";
-import { loadRoutes, findRoute } from "@/core/router";
-import { enhanceRequest, enhanceResponse } from "@/utils/enhancer";
-import { runMiddlewares, registerMiddlewareConfig } from "@/core/middleware";
+import {
+  withRequestMethods,
+  withResponseMethods,
+  type ZenoHeaders,
+} from "@/utils/adapter-base";
 import { primaryLog } from "@/utils/logs";
-import { EventEmitter } from "events";
 
-/**
- * No clustering because it currently degrades performance in Bun.
- * and a larger route cache (2000 entries) and optimized eviction (10%) for higher hit ratio in Bun, already try with Node, it doesn't improve it.
- */
+const MAX_BODY_SIZE = 10_485_760;
 
-const routeCache = new Map<string, any>();
-const MAX_ROUTE_CACHE = 2000;
+class _BunRequestBase {
+  params: Record<string, string> = {};
+  url: string;
+  method: string;
+  headers: ZenoHeaders;
+  socket = { setTimeout: (_: number) => {} } as const;
+  connection: { remoteAddress: string };
+  private _req: Request;
+
+  constructor(req: Request, pathname: string, search: string) {
+    this._req = req;
+    this.url = pathname + search;
+    this.method = req.method;
+    this.headers = req.headers as unknown as ZenoHeaders;
+    this.connection = {
+      remoteAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+    };
+  }
+
+  setTimeout(_: number) {}
+
+  text() {
+    return this._req.text();
+  }
+  body() {
+    return this._req.arrayBuffer().then((b: ArrayBuffer) => {
+      if (b.byteLength > MAX_BODY_SIZE)
+        throw Object.assign(new Error("Payload Too Large"), { code: 413 });
+      return Buffer.from(b);
+    });
+  }
+}
+
+class BunRequest extends withRequestMethods(_BunRequestBase) {
+  // Uses Bun native JSON parser directly, skipping the body() to Buffer conversion
+  json<T = any>(): Promise<T> {
+    return (this as any)._req.json() as Promise<T>;
+  }
+}
+
+class _BunResponseBase {
+  statusCode = 200;
+  headersSent = false;
+  get finished() {
+    return this.headersSent;
+  }
+  get writableEnded() {
+    return this.headersSent;
+  }
+
+  _body: any = null;
+  _headers: string[] | null = null;
+  private _listeners: ((...a: any[]) => void)[] | null = null;
+
+  on(event: string, listener: (...a: any[]) => void) {
+    if (event === "finish" || event === "close") {
+      if (!this._listeners) this._listeners = [];
+      this._listeners.push(listener);
+    }
+    return this;
+  }
+  once(event: string, listener: (...a: any[]) => void) {
+    return this.on(event, listener);
+  }
+  emit(event: string) {
+    if ((event === "finish" || event === "close") && this._listeners)
+      for (let i = 0; i < this._listeners.length; i++) this._listeners[i]();
+    return true;
+  }
+
+  setHeader(name: string, value: string) {
+    if (!this._headers) this._headers = [];
+    this._headers.push(name, value);
+    return this;
+  }
+  getHeader(name: string) {
+    if (!this._headers) return undefined;
+    const lo = name.toLowerCase();
+    for (let i = 0; i < this._headers.length; i += 2)
+      if (this._headers[i].toLowerCase() === lo) return this._headers[i + 1];
+  }
+  removeHeader(name: string) {
+    if (!this._headers) return this;
+    const lo = name.toLowerCase();
+    for (let i = 0; i < this._headers.length; i += 2)
+      if (this._headers[i].toLowerCase() === lo) {
+        this._headers.splice(i, 2);
+        break;
+      }
+    return this;
+  }
+  hasHeader(name: string) {
+    if (!this._headers) return false;
+    const lo = name.toLowerCase();
+    for (let i = 0; i < this._headers.length; i += 2)
+      if (this._headers[i].toLowerCase() === lo) return true;
+    return false;
+  }
+  writeHead(statusCode: number, headers?: Record<string, string> | null) {
+    this.statusCode = statusCode;
+    if (headers)
+      for (const [k, v] of Object.entries(headers)) this.setHeader(k, v);
+    return this;
+  }
+  write(chunk: any) {
+    this._body = (this._body ?? "") + chunk;
+    return true;
+  }
+  end(data?: any) {
+    if (data !== undefined) this.write(data);
+    this.headersSent = true;
+    if (this._listeners)
+      for (let i = 0; i < this._listeners.length; i++) this._listeners[i]();
+    return this;
+  }
+}
+
+class BunResponse extends withResponseMethods(_BunResponseBase) {}
 
 export const bunAdapter: Adapter = {
   name: "bun",
   createHandler: (config: string | ServerlessConfig) => {
     if (typeof config !== "string") {
-      throw new Error("bunAdapter requires a routesDir string, not a ServerlessConfig.");
+      throw new Error(
+        "bunAdapter requires a routesDir string, not a ServerlessConfig.",
+      );
     }
     const routesDir = config;
-    const transformRequest = bunAdapter.transformRequest!;
-    const transformResponse = bunAdapter.transformResponse!;
 
     return async (config: ServerConfig = {}) => {
       const { isDev, port = 3000, defaultHeaders } = config;
@@ -40,199 +159,74 @@ export const bunAdapter: Adapter = {
         port,
         async fetch(request) {
           const url = new URL(request.url);
-          const responseEmitter = new EventEmitter();
+          const pathname = url.pathname;
 
-          const bunReq = {
-            ...request,
-            url: url.pathname + url.search,
-            method: request.method,
-            headers: request.headers,
-            socket: { setTimeout: (_: number) => {} },
-            setTimeout: (_: number) => {},
-            connection: {
-              remoteAddress:
-                request.headers.get("x-forwarded-for") || "127.0.0.1",
-            },
-            async text() {
-              return await request.text();
-            },
-            async json() {
-              return await request.json();
-            },
-          };
-
-          const bunRes = {
-            statusCode: 200,
-            headers: new Headers(),
-            body: null as any,
-            headersSent: false,
-            finished: false,
-            writableEnded: false,
-            on: (event: string, listener: (...args: any[]) => void) => {
-              responseEmitter.on(event, listener);
-              return bunRes;
-            },
-            once: (event: string, listener: (...args: any[]) => void) => {
-              responseEmitter.once(event, listener);
-              return bunRes;
-            },
-            emit: (event: string, ...args: any[]) => {
-              return responseEmitter.emit(event, ...args);
-            },
-            setHeader(name: string, value: string) {
-              this.headers.set(name, value);
-              return this;
-            },
-            getHeader(name: string) {
-              return this.headers.get(name);
-            },
-            removeHeader(name: string) {
-              this.headers.delete(name);
-              return this;
-            },
-            hasHeader(name: string) {
-              return this.headers.has(name);
-            },
-            writeHead(
-              statusCode: number,
-              headers?: Record<string, string> | null
-            ) {
-              this.statusCode = statusCode;
-              if (headers && typeof headers === "object") {
-                Object.entries(headers).forEach(([key, value]) => {
-                  this.headers.set(key, value);
-                });
-              }
-              return this;
-            },
-            status(code: number) {
-              this.statusCode = code;
-              return this;
-            },
-            write(chunk: any) {
-              if (this.body === null) this.body = "";
-              this.body += chunk;
-              return true;
-            },
-            end(data?: any) {
-              if (data !== undefined) this.write(data);
-              this.headersSent = true;
-              this.finished = true;
-              this.writableEnded = true;
-              responseEmitter.emit("finish");
-              return this;
-            },
-            send(data: any) {
-              this.body = data;
-              this.end();
-              return this;
-            },
-            json(data: any) {
-              this.setHeader("Content-Type", "application/json");
-              this.body = JSON.stringify(data);
-              this.end();
-              return this;
-            },
-          };
+          const req = new BunRequest(request, pathname, url.search);
+          const res = new BunResponse();
 
           try {
-            bunRes.setHeader("Connection", "keep-alive");
-
-            if (defaultHeadersEntries.length > 0) {
-              for (let i = 0; i < defaultHeadersEntries.length; i++) {
-                bunRes.setHeader(
-                  defaultHeadersEntries[i][0],
-                  defaultHeadersEntries[i][1]
-                );
-              }
+            for (let i = 0; i < defaultHeadersEntries.length; i++) {
+              res.setHeader(
+                defaultHeadersEntries[i][0],
+                defaultHeadersEntries[i][1],
+              );
             }
 
-            const enhancedReq = transformRequest(bunReq as any);
-            const enhancedRes = transformResponse(bunRes as any);
-
-            const shouldContinue = await runMiddlewares(
-              "beforeRequest",
-              enhancedReq,
-              enhancedRes
-            );
-            if (!shouldContinue || enhancedRes.headersSent) {
-              return new Response(enhancedRes.body, {
-                status: enhancedRes.statusCode,
-                headers: enhancedRes.headers,
-              });
+            if (hasMiddlewares()) {
+              const ok = await runMiddlewares(
+                "beforeRequest",
+                req as any,
+                res as any,
+              );
+              if (!ok || res.headersSent) return buildResponse(res);
             }
 
-            const cacheKey = `${enhancedReq.method}:${url.pathname}`;
-            let route = routeCache.get(cacheKey);
+            const route = findRoute(pathname, request.method);
 
             if (!route) {
-              route = findRoute(url.pathname, request.method);
-              if (route) {
-                if (routeCache.size >= MAX_ROUTE_CACHE) {
-                  routeCache.delete(routeCache.keys().next().value!);
-                }
-                routeCache.set(cacheKey, route);
-              }
-            }
-
-            if (!route) {
-              enhancedRes.writeHead(404, {
-                "Content-Type": "application/json",
-              });
-              enhancedRes.end(JSON.stringify({ error: "Route not found" }));
+              if (hasMiddlewares())
+                await runMiddlewares("onError", req as any, res as any);
               return new Response(
                 JSON.stringify({ error: "Route not found" }),
                 {
                   status: 404,
                   headers: { "Content-Type": "application/json" },
-                }
+                },
               );
             }
-
             if ("error" in route) {
-              const status = route.status || 500;
-              enhancedRes.writeHead(status, {
-                "Content-Type": "application/json",
-              });
-              enhancedRes.end(JSON.stringify({ error: route.error }));
+              if (hasMiddlewares())
+                await runMiddlewares("onError", req as any, res as any);
               return new Response(JSON.stringify({ error: route.error }), {
-                status,
+                status: route.status || 500,
                 headers: { "Content-Type": "application/json" },
               });
             }
 
-            enhancedReq.params = route.params;
-            await route.handler(enhancedReq, enhancedRes);
-            await runMiddlewares("afterRequest", enhancedReq, enhancedRes);
+            req.params = route.params;
+            await route.handler(req as any, res as any);
 
-            if (!enhancedRes.headersSent) {
-              enhancedRes.end();
-            }
+            if (hasMiddlewares())
+              await runMiddlewares("afterRequest", req as any, res as any);
+            if (!res.headersSent) res.end();
 
-            return new Response(enhancedRes.body, {
-              status: enhancedRes.statusCode,
-              headers: enhancedRes.headers,
-            });
+            return buildResponse(res);
           } catch (error) {
-            if (isDev) {
-              console.error("Server error:", error);
-            }
-
+            if (isDev) console.error("Server error:", error);
             return new Response(
               JSON.stringify({ error: "Internal Server Error" }),
               {
                 status: 500,
                 headers: { "Content-Type": "application/json" },
-              }
+              },
             );
           }
         },
       });
 
       primaryLog(
-        `🚀 Server started on http://localhost:${port}${isDev ? " (dev)" : ""}`
+        `🚀 Server started on http://localhost:${port}${isDev ? " (dev)" : ""}`,
       );
-
       return {
         close: () => {
           server.stop();
@@ -240,7 +234,12 @@ export const bunAdapter: Adapter = {
       };
     };
   },
-
-  transformRequest: (req) => enhanceRequest(req),
-  transformResponse: (res) => enhanceResponse(res),
 };
+
+function buildResponse(res: _BunResponseBase): Response {
+  if (!res._headers) return new Response(res._body, { status: res.statusCode });
+  const headers = new Headers();
+  for (let i = 0; i < res._headers.length; i += 2)
+    headers.set(res._headers[i], res._headers[i + 1]);
+  return new Response(res._body, { status: res.statusCode, headers });
+}

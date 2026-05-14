@@ -20,8 +20,8 @@ interface Request extends IncomingMessage {
     options?: SSEClientOptions,
     handlers?: SSEEventHandlers
   ): SSEClient;
-  bindJSON<T>(): Promise<T>;
-  bindForm<T>(): Promise<T>;
+  json<T>(): Promise<T>;
+  form<T>(): Promise<T>;
   body(): Promise<Buffer>;
 }
 
