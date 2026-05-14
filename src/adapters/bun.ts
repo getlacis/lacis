@@ -243,8 +243,8 @@ export const bunAdapter: Adapter = {
             })().catch((err) => {
               handlerError = err;
               if (isDev) console.error("Server error:", err);
-              // Close any open SSE stream so the client disconnects cleanly
-              if (!res.headersSent) res.end();
+              // Only close an open SSE stream — non-SSE errors are handled below via handlerError
+              if (res._sseReadable && !res.headersSent) res.end();
             });
 
             // One microtask: enough for synchronous initSSE() at the top of the handler to run.

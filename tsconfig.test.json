@@ -5,7 +5,7 @@
     "moduleResolution": "node",
     "verbatimModuleSyntax": false,
     "esModuleInterop": true,
-    "types": ["node", "jest"],
+    "types": ["node", "jest", "bun-types"],
     "noEmit": true
   },
   "include": ["src", "tests"]
