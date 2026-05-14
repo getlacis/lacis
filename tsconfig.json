@@ -22,13 +22,14 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
-    "types": ["node", "jest"]
+    "types": ["node", "jest", "bun"]
   },
   "exclude": [
     "node_modules",
     "examples",
     "dist",
     "tests",
+    "benchmark",
     "jest.config.cjs",
     "src/cli/templates"
   ]
