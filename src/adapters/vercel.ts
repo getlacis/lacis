@@ -1,6 +1,7 @@
 import type { Adapter, ServerlessConfig, VercelRequest, VercelResponse, Request, Response } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
 import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
+import { registerCorsConfig } from "@/core/cors";
 import { applyRequestMethods, applyResponseMethods } from "@/utils/adapter-base";
 
 export const vercelAdapter: Adapter = {
@@ -19,6 +20,7 @@ export const vercelAdapter: Adapter = {
       if (initPromise) return initPromise;
       initPromise = (async () => {
         registerRoutes(config.routes);
+        registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
       })();
       return initPromise;
@@ -34,25 +36,25 @@ export const vercelAdapter: Adapter = {
       const req = vercelReq as unknown as Request;
       const res = vercelRes as unknown as Response;
 
-      const route = findRoute(req.url ?? "/", req.method ?? "GET");
-
-      if (!route) {
-        res.status(404).json({ error: "Route not found" });
-        return;
-      }
-
-      if (isRouteError(route)) {
-        res.status(route.status ?? 500).json({ error: route.error });
-        return;
-      }
-
-      req.params = route.params;
-
       try {
         if (hasMiddlewares()) {
           const shouldContinue = await runMiddlewares("beforeRequest", req, res);
           if (shouldContinue === false || res.headersSent) return;
         }
+
+        const route = findRoute(req.url ?? "/", req.method ?? "GET");
+
+        if (!route) {
+          res.status(404).json({ error: "Route not found" });
+          return;
+        }
+
+        if (isRouteError(route)) {
+          res.status(route.status ?? 500).json({ error: route.error });
+          return;
+        }
+
+        req.params = route.params;
 
         await route.handler(req, res);
 

@@ -6,6 +6,26 @@ import type {
   SSEOptions,
 } from "./";
 
+interface CookieOptions {
+  path?: string;
+  domain?: string;
+  maxAge?: number;
+  expires?: Date;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+}
+
+interface RequestCookies {
+  get(name: string): string | undefined;
+  all(): Record<string, string>;
+}
+
+interface ResponseCookies {
+  set(name: string, value: string, options?: CookieOptions): ResponseCookies;
+  delete(name: string, options?: Pick<CookieOptions, 'path' | 'domain'>): ResponseCookies;
+}
+
 interface UploadedFile {
   filename: string;
   mimetype: string;
@@ -16,6 +36,8 @@ interface UploadedFile {
 interface Request extends IncomingMessage {
   params?: Record<string, string>;
   query?: Record<string, string>;
+  cookies: RequestCookies;
+  getHeader(name: string): string | undefined;
   createSSEClient(
     options?: SSEClientOptions,
     handlers?: SSEEventHandlers
@@ -28,6 +50,7 @@ interface Request extends IncomingMessage {
 interface Response extends ServerResponse {
   headers?: Record<string, string>;
   body?: any;
+  cookies: ResponseCookies;
 
   json(data: any): void;
   send(data: any): void;
@@ -43,4 +66,4 @@ interface Response extends ServerResponse {
   sseError(event: string, error: string, code?: number, details?: string): void;
 }
 
-export type { Request, Response, UploadedFile };
+export type { Request, Response, UploadedFile, CookieOptions, RequestCookies, ResponseCookies };

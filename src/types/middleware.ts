@@ -1,4 +1,4 @@
-import type { Request, Response } from "./enhancer";
+import type { Request, Response } from "./http";
 
 type MiddlewareType = 'beforeRequest' | 'afterRequest' | 'onError';
 type MiddlewareCallback = (req: Request, res: Response, context?: any) => Promise<void | boolean> | void | boolean;

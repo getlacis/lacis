@@ -1,6 +1,15 @@
 import { IncomingMessage, ServerResponse } from "http";
 import type { MiddlewareCallback } from "./middleware";
 
+interface CorsConfig {
+  origin?: string | string[] | RegExp | ((origin: string) => boolean);
+  methods?: string[];
+  allowedHeaders?: string[];
+  exposedHeaders?: string[];
+  credentials?: boolean;
+  maxAge?: number;
+}
+
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
 // Handler for each HTTP method, need to be modified to give extra parameters and functionality
@@ -49,6 +58,7 @@ interface ServerConfig {
     stickySessions?: boolean;
   };
   defaultHeaders?: Record<string, string>;
+  cors?: CorsConfig;
   middleware?: {
     beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
     afterRequest?: MiddlewareCallback | MiddlewareCallback[];
@@ -73,11 +83,11 @@ interface ClusterConfig {
   workers?: number; // Number of workers, defaults to CPU cores
 }
 
-export type { Handler, RouteHandlers, Route, ServerConfig, ClusterConfig };
+export type { Handler, RouteHandlers, Route, ServerConfig, ClusterConfig, CorsConfig };
 export * from "./sse";
 export * from "./adapter";
 export * from "./platform";
-export * from "./enhancer";
+export * from "./http";
 export * from "./middleware";
 export * from "./monitor";
 export * from "./loadBalancer";

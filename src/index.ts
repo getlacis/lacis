@@ -4,6 +4,7 @@ export * from "@/core/router";
 export * from "@/core/middleware";
 export * from "@/core/errors";
 export * from "@/core/rateLimit";
+export * from "@/core/cors";
 export * from "@/sse/server";
 export * from "@/sse/client";
 export * from "@/types/index";

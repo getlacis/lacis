@@ -3,6 +3,7 @@ import {
   registerMiddlewareConfig,
   runMiddlewares,
 } from "@/core/middleware";
+import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import {
@@ -117,6 +118,7 @@ export const nodeAdapter: Adapter = {
 
       if (cluster.isWorker || !clusterConfig?.enabled) {
         await loadRoutes(routesDir);
+        registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
 
         const handleRequest = async (
@@ -135,6 +137,19 @@ export const nodeAdapter: Adapter = {
             const rawUrl = req.url || "/";
             const qIdx = rawUrl.indexOf("?");
             const pathname = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
+
+            if (hasMiddlewares()) {
+              const ok = await runMiddlewares(
+                "beforeRequest",
+                req as any,
+                res as any,
+              );
+              if (ok === false || res.headersSent) {
+                requestTracker?.end(res.statusCode || 204);
+                return;
+              }
+            }
+
             const route = findRoute(pathname, req.method || "GET");
 
             if (!route) {
@@ -150,18 +165,6 @@ export const nodeAdapter: Adapter = {
               res.status(status).json({ error: route.error });
               requestTracker?.end(status, true);
               return;
-            }
-
-            if (hasMiddlewares()) {
-              const ok = await runMiddlewares(
-                "beforeRequest",
-                req as any,
-                res as any,
-              );
-              if (ok === false || res.headersSent) {
-                requestTracker?.end(res.statusCode || 400);
-                return;
-              }
             }
 
             req.params = route.params;

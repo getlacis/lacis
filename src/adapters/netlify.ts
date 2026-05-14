@@ -1,9 +1,20 @@
 import type { Adapter, ServerlessConfig, NetlifyEvent, NetlifyContext, Request, Response } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
 import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
+import { registerCorsConfig } from "@/core/cors";
 import { applyRequestMethods, applyResponseMethods } from "@/utils/adapter-base";
 import { IncomingMessage, ServerResponse } from "http";
 import { Socket } from "net";
+
+function netlifyResponse(
+  statusCode: number,
+  headers: Record<string, string>,
+  multiValueHeaders: Record<string, string[]>,
+  body: string,
+) {
+  const hasMulti = Object.keys(multiValueHeaders).length > 0;
+  return { statusCode, headers, ...(hasMulti ? { multiValueHeaders } : {}), body };
+}
 
 export const netlifyAdapter: Adapter = {
   name: "netlify",
@@ -21,6 +32,7 @@ export const netlifyAdapter: Adapter = {
       if (initPromise) return initPromise;
       initPromise = (async () => {
         registerRoutes(config.routes);
+        registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
       })();
       return initPromise;
@@ -46,6 +58,7 @@ export const netlifyAdapter: Adapter = {
 
       let responseBody = "";
       let responseHeaders: Record<string, string> = {};
+      let multiValueResponseHeaders: Record<string, string[]> = {};
       let headersSent = false;
 
       const rawRes = new ServerResponse(rawReq);
@@ -56,7 +69,13 @@ export const netlifyAdapter: Adapter = {
         return this;
       };
       rawRes.setHeader = function (name: string, value: any) {
-        responseHeaders[name.toLowerCase()] = String(value);
+        const key = name.toLowerCase();
+        if (Array.isArray(value)) {
+          multiValueResponseHeaders[key] = value.map(String);
+          responseHeaders[key] = String(value[0]);
+        } else {
+          responseHeaders[key] = String(value);
+        }
         return this;
       };
       rawRes.getHeader = function (name: string) {
@@ -89,28 +108,28 @@ export const netlifyAdapter: Adapter = {
         };
       }
 
-      req.params = route.params;
-
       try {
         if (hasMiddlewares()) {
           const shouldContinue = await runMiddlewares("beforeRequest", req, res);
           if (shouldContinue === false || headersSent) {
-            return { statusCode: res.statusCode, headers: responseHeaders, body: responseBody };
+            return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
           }
         }
+
+        req.params = route.params;
 
         await route.handler(req, res);
 
         if (hasMiddlewares()) await runMiddlewares("afterRequest", req, res);
 
-        return { statusCode: res.statusCode, headers: responseHeaders, body: responseBody };
+        return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
       } catch (error) {
         console.error("[zeno/netlify] Handler error:", error);
         if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
         if (!headersSent) {
           return { statusCode: 500, body: JSON.stringify({ error: "Internal server error" }) };
         }
-        return { statusCode: res.statusCode, headers: responseHeaders, body: responseBody };
+        return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
       }
     };
   },

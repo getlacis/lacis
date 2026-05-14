@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, RouteHandlers } from ".";
+import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, RouteHandlers, CorsConfig } from ".";
 import type { MiddlewareCallback } from "./middleware";
 
 interface AdapterRequest extends IncomingMessage {
@@ -29,6 +29,7 @@ interface ServerlessRoute {
 
 interface ServerlessConfig {
   routes: ServerlessRoute[];
+  cors?: CorsConfig;
   middleware?: {
     beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
     afterRequest?: MiddlewareCallback | MiddlewareCallback[];

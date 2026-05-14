@@ -257,6 +257,12 @@ class Router {
     this.verbose = verbose;
     return this;
   }
+
+  reset(): void {
+    this.rootNode = this.createNode();
+    this.cachedRoutes = new Map();
+    this.routeCount = 0;
+  }
 }
 
 const router = new Router();
@@ -303,6 +309,10 @@ export function getRouterStats() {
 
 export function setVerboseLogging(verbose: boolean) {
   router.setVerbose(verbose);
+}
+
+export function resetRouter(): void {
+  router.reset();
 }
 
 export { router, isRouteError };

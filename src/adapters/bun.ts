@@ -3,6 +3,7 @@ import {
   registerMiddlewareConfig,
   runMiddlewares,
 } from "@/core/middleware";
+import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig, SSEOptions } from "@/types";
 import {
@@ -88,9 +89,13 @@ class _BunResponseBase {
     return true;
   }
 
-  setHeader(name: string, value: string) {
+  setHeader(name: string, value: string | string[]) {
     if (!this._headers) this._headers = [];
-    this._headers.push(name, value);
+    if (Array.isArray(value)) {
+      for (const v of value) this._headers.push(name, v);
+    } else {
+      this._headers.push(name, value);
+    }
     return this;
   }
   getHeader(name: string) {
@@ -176,6 +181,7 @@ export const bunAdapter: Adapter = {
       primaryLog("🚀 Bun high-performance mode enabled");
 
       await loadRoutes(routesDir);
+      registerCorsConfig(config.cors);
       registerMiddlewareConfig(config.middleware);
 
       const defaultHeadersEntries = defaultHeaders
@@ -300,7 +306,14 @@ function buildResponse(res: _BunResponseBase, body?: ReadableStream<Uint8Array> 
   const responseBody = body ?? res._body;
   if (!res._headers) return new Response(responseBody, { status: res.statusCode });
   const headers = new Headers();
-  for (let i = 0; i < res._headers.length; i += 2)
-    headers.set(res._headers[i], res._headers[i + 1]);
+  for (let i = 0; i < res._headers.length; i += 2) {
+    const name = res._headers[i];
+    const value = res._headers[i + 1];
+    if (name.toLowerCase() === 'set-cookie') {
+      headers.append(name, value);
+    } else {
+      headers.set(name, value);
+    }
+  }
   return new Response(responseBody, { status: res.statusCode, headers });
 }

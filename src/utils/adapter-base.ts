@@ -11,6 +11,7 @@ import {
   sseRetry,
 } from "@/sse/server";
 import type {
+  CookieOptions,
   SSEClient,
   SSEClientOptions,
   SSEEventHandlers,
@@ -25,12 +26,105 @@ export interface ZenoHeaders {
   forEach(cb: (value: string, key: string) => void): void;
 }
 
+export class RequestCookiesImpl {
+  private _parsed: Record<string, string> | null = null;
+  private readonly _raw: string | undefined;
+
+  constructor(raw: string | undefined) {
+    this._raw = raw;
+  }
+
+  private _parse(): Record<string, string> {
+    if (this._parsed !== null) return this._parsed;
+    this._parsed = {};
+    if (!this._raw) return this._parsed;
+    for (const part of this._raw.split(';')) {
+      const idx = part.indexOf('=');
+      if (idx === -1) continue;
+      const k = part.slice(0, idx).trim();
+      const v = part.slice(idx + 1).trim();
+      if (k) {
+        const unquoted = v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v;
+        try { this._parsed[k] = decodeURIComponent(unquoted); } catch { this._parsed[k] = unquoted; }
+      }
+    }
+    return this._parsed;
+  }
+
+  get(name: string): string | undefined {
+    return this._parse()[name];
+  }
+
+  all(): Record<string, string> {
+    return { ...this._parse() };
+  }
+}
+
+export class ResponseCookiesImpl {
+  private _pending: Array<{ name: string; value: string; opts: CookieOptions }> = [];
+
+  set(name: string, value: string, options: CookieOptions = {}): this {
+    this._pending.push({ name, value, opts: options });
+    return this;
+  }
+
+  delete(name: string, options: Pick<CookieOptions, 'path' | 'domain'> = {}): this {
+    return this.set(name, '', { ...options, maxAge: 0, expires: new Date(0) });
+  }
+
+  serialize(): string[] {
+    return this._pending.map(({ name, value, opts }) => {
+      let str = `${name}=${encodeURIComponent(value)}`;
+      const path = opts.path !== undefined ? opts.path : '/';
+      if (path) str += `; Path=${path}`;
+      if (opts.domain) str += `; Domain=${opts.domain}`;
+      if (opts.maxAge != null) str += `; Max-Age=${opts.maxAge}`;
+      if (opts.expires) str += `; Expires=${opts.expires.toUTCString()}`;
+      if (opts.httpOnly) str += '; HttpOnly';
+      if (opts.secure) str += '; Secure';
+      if (opts.sameSite) str += `; SameSite=${opts.sameSite}`;
+      return str;
+    });
+  }
+}
+
+function parseCookieHeader(
+  headers: ZenoHeaders | Record<string, string | string[] | undefined>,
+): string | undefined {
+  if (typeof (headers as ZenoHeaders).get === 'function') {
+    return (headers as ZenoHeaders).get('cookie') ?? undefined;
+  }
+  const raw = (headers as Record<string, string | string[] | undefined>)['cookie'];
+  if (Array.isArray(raw)) return raw.join('; ');
+  return raw;
+}
+
+// --- Request mixin ---
+
 export type RequestMixinBase = new (...args: any[]) => {
   params: Record<string, string>;
+  headers: ZenoHeaders | Record<string, string | string[] | undefined>;
 };
 
 export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
   return class extends Base {
+    _zreqCookies?: RequestCookiesImpl;
+
+    getHeader(name: string): string | undefined {
+      const h = this.headers;
+      if (typeof (h as ZenoHeaders).get === 'function') {
+        return (h as ZenoHeaders).get(name) ?? undefined;
+      }
+      const val = (h as Record<string, string | string[] | undefined>)[name.toLowerCase()];
+      return Array.isArray(val) ? val[0] : val;
+    }
+
+    get cookies(): RequestCookiesImpl {
+      if (!this._zreqCookies)
+        this._zreqCookies = new RequestCookiesImpl(parseCookieHeader(this.headers));
+      return this._zreqCookies;
+    }
+
     json<R>(): Promise<R> {
       return (this as any)
         .body()
@@ -39,13 +133,11 @@ export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
 
     form<R>(): Promise<R> {
       return new Promise((resolve, reject) => {
-        const headers = (this as any).headers as
-          | ZenoHeaders
-          | Record<string, string | string[] | undefined>;
+        const headers = this.headers;
         const contentType =
-          typeof (headers as any).get === "function"
+          typeof (headers as ZenoHeaders).get === "function"
             ? ((headers as ZenoHeaders).get("content-type") ?? "")
-            : (((headers as any)["content-type"] as string) ?? "");
+            : (((headers as Record<string, string | string[] | undefined>)["content-type"]) as string ?? "");
 
         if (!contentType.startsWith("multipart/form-data")) {
           reject(new Error("Content-Type is not multipart/form-data"));
@@ -138,16 +230,36 @@ export function nodeBody(this: any): Promise<Buffer> {
   });
 }
 
+// --- Response mixin ---
+
 export type ResponseMixinBase = new (...args: any[]) => {
   statusCode: number;
   headersSent: boolean;
-  setHeader(name: string, value: string): any;
+  setHeader(name: string, value: string | readonly string[]): any;
   end(data?: any): any;
   write(chunk: any): any;
 };
 
+function flushCookies(jar: ResponseCookiesImpl, res: { headersSent: boolean; setHeader(n: string, v: string | readonly string[]): any }): void {
+  const serialized = jar.serialize();
+  if (serialized.length > 0 && !res.headersSent)
+    res.setHeader('Set-Cookie', serialized);
+}
+
 export function withResponseMethods<T extends ResponseMixinBase>(Base: T) {
   return class extends Base {
+    _zresCookies?: ResponseCookiesImpl;
+
+    get cookies(): ResponseCookiesImpl {
+      if (!this._zresCookies) this._zresCookies = new ResponseCookiesImpl();
+      return this._zresCookies;
+    }
+
+    end(data?: any): any {
+      if (this._zresCookies) flushCookies(this._zresCookies, this);
+      return super.end(data);
+    }
+
     status(code: number) {
       this.statusCode = code;
       return this;
@@ -199,19 +311,19 @@ export function withResponseMethods<T extends ResponseMixinBase>(Base: T) {
   };
 }
 
-// Instantiate dummy classes once to extract prototype methods, avoiding closure allocation on every serverless invocation
+// Prototype extraction for serverless adapters (Vercel/Netlify)
+// Note: end() is intentionally NOT copied — applyResponseMethods wraps it per-instance
 class _ReqBase {
   params: Record<string, string> = {};
-  body() {
-    return nodeBody.call(this);
-  }
+  headers: ZenoHeaders | Record<string, string | string[] | undefined> = {};
+  body() { return nodeBody.call(this); }
 }
 const _reqProto = withRequestMethods(_ReqBase).prototype;
 
 class _ResBase {
   statusCode = 200;
   headersSent = false;
-  setHeader(_n: string, _v: string): any {}
+  setHeader(_n: string, _v: string | readonly string[]): any {}
   end(_d?: any): any {}
   write(_c: any): any {}
 }
@@ -221,7 +333,9 @@ export function applyRequestMethods(req: any): void {
   req.body = nodeBody;
   req.json = _reqProto.json;
   req.form = _reqProto.form;
+  req.getHeader = _reqProto.getHeader;
   req.createSSEClient = _reqProto.createSSEClient;
+  req.cookies = new RequestCookiesImpl(parseCookieHeader(req.headers));
 }
 
 export function applyResponseMethods(res: any): void {
@@ -238,4 +352,13 @@ export function applyResponseMethods(res: any): void {
   res.sseRetry = p.sseRetry;
   res.sseClose = p.sseClose;
   res.sseError = p.sseError;
+
+  const cookieJar = new ResponseCookiesImpl();
+  res.cookies = cookieJar;
+
+  const origEnd = res.end.bind(res);
+  res.end = function(this: any, ...args: any[]) {
+    flushCookies(cookieJar, this);
+    return origEnd(...args);
+  };
 }
