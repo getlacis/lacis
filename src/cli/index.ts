@@ -2,12 +2,10 @@ import { resolve } from 'path'
 import { generateManifest } from './build.js'
 import { watchRoutes } from './watch.js'
 import { dev } from './dev.js'
-import { init } from './init.js'
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2)
   const command = args[0] ?? ''
-  const subcommand = args[1] ?? null
 
   const routesFlagIndex = args.indexOf('--routes')
   const routesDirArg =
@@ -17,7 +15,7 @@ function parseArgs(argv: string[]) {
     ? resolve(process.cwd(), routesDirArg)
     : resolve(process.cwd(), 'routes')
 
-  return { command, subcommand, routesDir }
+  return { command, routesDir }
 }
 
 function printHelp() {
@@ -25,12 +23,11 @@ function printHelp() {
 Usage: zeno <command> [options]
 
 Commands:
-  init              Scaffold a base zeno project
-  init netlify      Add Netlify adapter files
-  init vercel       Add Vercel adapter files
   build             Generate routes/_manifest.ts
   watch             Watch routes and regenerate manifest on changes
   dev               Auto-detect platform and start dev server
+
+To scaffold a new project: npm create zeno@latest
 
 Options:
   --routes <dir>    Path to routes directory (default: ./routes)
@@ -38,18 +35,9 @@ Options:
 }
 
 async function main() {
-  const { command, subcommand, routesDir } = parseArgs(process.argv)
+  const { command, routesDir } = parseArgs(process.argv)
 
   switch (command) {
-    case 'init': {
-      const platform =
-        subcommand === 'netlify' ? 'netlify'
-        : subcommand === 'vercel' ? 'vercel'
-        : subcommand !== null ? (console.error(`Unknown platform: ${subcommand}`), process.exit(1))
-        : null
-      init(platform, process.cwd())
-      break
-    }
     case 'build':
       await generateManifest(routesDir)
       break
