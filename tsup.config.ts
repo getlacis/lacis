@@ -4,24 +4,19 @@ const openApiExternals = ['zod', 'zod-to-json-schema', '@valibot/to-json-schema'
 
 export default defineConfig([
   {
-    entry: ['src/index.ts'],
+    entry: {
+      'index': 'src/index.ts',
+      'adapters/index': 'src/adapters/index.ts',
+    },
     format: ['esm'],
     dts: true,
     clean: true,
     outDir: 'dist',
+    splitting: true,
     platform: 'node',
     sourcemap: false,
     treeshake: true,
     external: openApiExternals,
-  },
-  {
-    entry: { index: 'src/adapters/index.ts' },
-    format: ['esm'],
-    dts: true,
-    outDir: 'dist/adapters',
-    platform: 'node',
-    sourcemap: false,
-    treeshake: true,
   },
   {
     entry: { index: 'src/cli/index.ts' },
