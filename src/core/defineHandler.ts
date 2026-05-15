@@ -74,9 +74,9 @@ async function runValidation<T>(
 }
 
 function formatIssues(issues: ReadonlyArray<StandardIssue>) {
-  return issues.map((issue) => ({
+  return Array.from(issues).map((issue) => ({
     message: issue.message,
-    path: issue.path?.map((p) => (typeof p === "object" && "key" in p ? p.key : p)),
+    path: issue.path ? Array.from(issue.path).map((p) => (typeof p === "object" && "key" in p ? p.key : p)) : undefined,
   }))
 }
 

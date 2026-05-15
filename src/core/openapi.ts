@@ -18,6 +18,8 @@ async function schemaToJsonSchema(schema: any): Promise<Record<string, any> | nu
   if (!vendor) return null
   try {
     if (vendor === "zod") {
+      const zod = await import("zod" as any)
+      if (typeof zod.toJSONSchema === "function") return zod.toJSONSchema(schema)
       const mod = await import("zod-to-json-schema" as any)
       return (mod.zodToJsonSchema ?? mod.default)(schema, { target: "openApi3" })
     }
