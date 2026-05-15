@@ -52,6 +52,15 @@ interface ServerConfig {
     onError?: MiddlewareCallback | MiddlewareCallback[];
   };
   
+  openapi?: {
+    path?: string
+    info: {
+      title: string
+      version: string
+      description?: string
+    }
+  };
+
   monitoring?: {
     enabled: boolean;
     sampleInterval?: number;
