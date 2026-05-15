@@ -15,7 +15,7 @@ async function createServer(
   config: ServerConfig = defaultConfig
 ) {
   const { platform = 'node' } = config;
-  const verbose = config.isDev && cluster.isPrimary;
+  const verbose = config.isDev && cluster.isPrimary && !process.env.ZENO_BUN_WORKER;
   
   try {
     await loadRoutes(routesDir);
@@ -44,7 +44,7 @@ async function createServer(
     let server;
     switch (platform) {
       case 'node':
-        server = (handler as (config?: ServerConfig) => Server)(config);
+        server = await (handler as (config?: ServerConfig) => Promise<Server>)(config);
         serverInstance = server;
         break;
       case 'bun':

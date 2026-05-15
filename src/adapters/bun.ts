@@ -12,6 +12,7 @@ import {
   type ZenoHeaders,
 } from "@/utils/adapter-base";
 import { primaryLog } from "@/utils/logs";
+import os from "os";
 
 const MAX_BODY_SIZE = 10_485_760;
 const _encoder = new TextEncoder();
@@ -176,7 +177,42 @@ export const bunAdapter: Adapter = {
     const routesDir = config;
 
     return async (config: ServerConfig = {}) => {
-      const { isDev, port = 3000, defaultHeaders } = config;
+      const { isDev, port = 3000, defaultHeaders, cluster: clusterConfig } = config;
+
+      // ZENO_BUN_WORKER contains the primary's PID so workers can detect parent death
+      const primaryPid = parseInt(process.env.ZENO_BUN_WORKER ?? '0');
+      const isWorker = primaryPid > 0;
+
+      if (clusterConfig?.enabled && !isWorker) {
+        const numWorkers = clusterConfig.workers ?? os.cpus().length;
+        primaryLog(`🧵 Starting Bun server with ${numWorkers} workers (reusePort)`);
+
+        const procs = Array.from({ length: numWorkers }, () =>
+          Bun.spawn(process.argv, {
+            env: { ...process.env as Record<string, string>, ZENO_BUN_WORKER: String(process.pid) },
+            stdout: 'ignore',
+            stderr: 'inherit',
+          })
+        );
+
+        primaryLog(`🚀 Server running at http://localhost:${port}/`);
+
+        return {
+          close: (callback?: () => void) => {
+            for (const p of procs) p.kill();
+            callback?.();
+          },
+        };
+      }
+
+      // Worker: periodically check the primary is still alive to avoid orphan processes
+      if (isWorker) {
+        const interval = setInterval(() => {
+          try { process.kill(primaryPid, 0); }
+          catch { clearInterval(interval); process.exit(0); }
+        }, 2000);
+        interval.unref();
+      }
 
       primaryLog("🚀 Bun high-performance mode enabled");
 
@@ -190,6 +226,7 @@ export const bunAdapter: Adapter = {
 
       const server = Bun.serve({
         port,
+        reusePort: isWorker,
         async fetch(request) {
           const url = new URL(request.url);
           const pathname = url.pathname;
@@ -253,9 +290,8 @@ export const bunAdapter: Adapter = {
               if (res._sseReadable && !res.headersSent) res.end();
             });
 
-            // One microtask: enough for synchronous initSSE() at the top of the handler to run.
-            // After this point, calling initSSE() will throw an explicit error.
-            await Promise.resolve();
+            // The handler's sync portion has already run (up to its first await),
+            // so initSSE() has been called if it's going to be. Close the window now.
             res._closeSseWindow();
 
             if (res._sseReadable) {

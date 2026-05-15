@@ -99,7 +99,7 @@ function parseCookieHeader(
   return raw;
 }
 
-// --- Request mixin ---
+// Request mixin
 
 export type RequestMixinBase = new (...args: any[]) => {
   params: Record<string, string>;
@@ -230,7 +230,7 @@ export function nodeBody(this: any): Promise<Buffer> {
   });
 }
 
-// --- Response mixin ---
+// Response mixin
 
 export type ResponseMixinBase = new (...args: any[]) => {
   statusCode: number;

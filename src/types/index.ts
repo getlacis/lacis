@@ -41,8 +41,6 @@ interface ServerConfig {
   cluster?: {
     enabled: boolean;
     workers?: number;
-    loadBalancing?: 'round-robin' | 'least-connections' | 'least-cpu' | 'fastest-response';
-    stickySessions?: boolean;
   };
   defaultHeaders?: Record<string, string>;
   cors?: CorsConfig;

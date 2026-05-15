@@ -13,6 +13,7 @@ import {
 } from "@/utils/adapter-base";
 import { primaryLog } from "@/utils/logs";
 import { getMonitor } from "@/utils/monitor";
+import { createLoadBalancer } from "@/utils/loadBalancer";
 import cluster from "cluster";
 import http from "http";
 import https from "https";
@@ -73,45 +74,29 @@ export const nodeAdapter: Adapter = {
         ? Object.entries(defaultHeaders)
         : [];
 
-      // Primary process for cluster management
       if (clusterConfig?.enabled && cluster.isPrimary) {
-        const numWorkers = clusterConfig.workers || os.cpus().length;
+        const numWorkers = clusterConfig.workers ?? os.cpus().length;
+        const protocol = config.httpsOptions ? 'https' : 'http';
 
         primaryLog(`🧵 Starting server with ${numWorkers} workers`);
 
-        // Force Round Robin scheduling when available
+        // SCHED_RR must be set before the first cluster.fork() — frozen after that
         if (cluster.schedulingPolicy !== undefined) {
-          try {
-            cluster.schedulingPolicy = cluster.SCHED_RR;
-            primaryLog(`📋 Using Round Robin scheduling policy`);
-          } catch (e) {
-            primaryLog(`⚠️ Could not set Round Robin scheduling policy`);
-          }
+          try { cluster.schedulingPolicy = cluster.SCHED_RR; } catch {}
         }
 
-        for (let i = 0; i < numWorkers; i++) {
-          cluster.fork();
-        }
+        const lb = createLoadBalancer();
+        lb.start(numWorkers);
 
-        cluster.on("exit", (worker, code, signal) => {
-          primaryLog(
-            `Worker ${worker.process.pid} died (${
-              signal || code
-            }). Restarting...`,
-          );
-          setTimeout(() => {
-            cluster.fork();
-          }, 1000);
-        });
+        primaryLog(`🚀 Server running at ${protocol}://localhost:${port}/` + (isDev ? ' (dev)' : ''));
+        if (isDev && performanceMonitor) {
+          primaryLog(`📊 Performance monitoring available at http://localhost:${port}/health`);
+        }
 
         return {
-          close: () => {
-            for (const id in cluster.workers) {
-              cluster.workers[id]?.kill();
-            }
-            if (performanceMonitor) {
-              performanceMonitor.stop();
-            }
+          close: (callback?: () => void) => {
+            if (performanceMonitor) performanceMonitor.stop();
+            lb.shutdown(callback);
           },
         };
       }
@@ -227,10 +212,18 @@ export const nodeAdapter: Adapter = {
             )
           : http.createServer(serverOptions, requestListener);
 
+        server.on('clientError', (_err: any, socket: any) => {
+          if (!socket.destroyed) socket.destroy();
+        });
+
         const protocol = config.httpsOptions ? "https" : "http";
 
+        if (cluster.isWorker) {
+          createLoadBalancer().start();
+        }
+
         server.listen(port, () => {
-          if (cluster.isPrimary || !clusterConfig?.enabled) {
+          if (!clusterConfig?.enabled) {
             primaryLog(
               `🚀 Server running at ${protocol}://localhost:${port}/` +
                 (isDev ? " (dev)" : ""),
