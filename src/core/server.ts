@@ -1,12 +1,14 @@
 import { getAdapter } from '@/adapters';
 import { defaultConfig, type ServerConfig } from "@/config/serverConfig";
-import { loadRoutes } from './router';
+import { loadRoutes, router } from './router';
+import { buildOpenApiDoc } from './openapi';
 import type { Server } from 'http';
 import { primaryLog } from '@/utils/logs';
 import cluster from 'cluster';
 
 let serverInstance: Server | null = null;
 let isShuttingDown = false;
+let shutdownListenersRegistered = false;
 
 async function createServer(
   routesDir: string,
@@ -17,7 +19,14 @@ async function createServer(
   
   try {
     await loadRoutes(routesDir);
-    
+
+    if (config.openapi) {
+      const doc = await buildOpenApiDoc(config.openapi);
+      const openapiPath = config.openapi.path ?? "/openapi.json";
+      router.addRoute("GET", openapiPath, (_req: any, res: any) => res.json(doc));
+      if (verbose) primaryLog(`OpenAPI doc available at ${openapiPath}`);
+    }
+
     if (verbose) {
       primaryLog("🚀 Serveur démarré");
       primaryLog(`📂 Routes chargées depuis: ${routesDir}`);
@@ -62,7 +71,9 @@ async function createServer(
 
 function setupGracefulShutdown() {
   if (!cluster.isPrimary) return;
-  
+  if (shutdownListenersRegistered) return;
+  shutdownListenersRegistered = true;
+
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;

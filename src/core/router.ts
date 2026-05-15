@@ -73,6 +73,10 @@ class Router {
       if (parsed.isParam) {
         if (!node.paramChild) {
           node.paramChild = { name: parsed.name, node: this.createNode(), isOptional: parsed.isOptional };
+        } else if (node.paramChild.name !== parsed.name) {
+          throw new Error(
+            `Route conflict: param name "[${parsed.name}]" conflicts with existing "[${node.paramChild.name}]" at the same path position. Use the same param name for all methods at this level.`
+          );
         }
         node = node.paramChild.node;
       } else if (segment === "*") {
@@ -87,8 +91,8 @@ class Router {
     }
 
     node.isEndpoint = true;
+    if (!node.handlers[method]) this.routeCount++;
     node.handlers[method] = handler;
-    this.routeCount++;
     this.cachedRoutes.clear();
     return this;
   }
@@ -242,6 +246,41 @@ class Router {
     this.lastLoaded = Date.now();
     if (this.verbose) primaryLog(`Loading completed: ${this.routeCount} routes`);
     return true;
+  }
+
+  getRoutes(): Array<{ method: string; path: string; handler: Function }> {
+    const result: Array<{ method: string; path: string; handler: Function }> = [];
+    this.collectRoutes(this.rootNode, [], result);
+    return result;
+  }
+
+  private collectRoutes(
+    node: RouteNode,
+    segments: string[],
+    result: Array<{ method: string; path: string; handler: Function }>,
+  ): void {
+    if (node.isEndpoint) {
+      const path = segments.length === 0 ? "/" : "/" + segments.join("/");
+      for (const [method, handler] of Object.entries(node.handlers)) {
+        if (method !== "") result.push({ method, path, handler });
+      }
+    }
+
+    for (const [segment, child] of node.staticChildren) {
+      this.collectRoutes(child, [...segments, segment], result);
+    }
+
+    if (node.paramChild) {
+      const { name, isOptional, node: child } = node.paramChild;
+      this.collectRoutes(child, [...segments, isOptional ? `:${name}?` : `:${name}`], result);
+    }
+
+    if (node.wildcardHandler) {
+      const path = "/" + [...segments, "*"].join("/");
+      for (const [method, handler] of Object.entries(node.wildcardHandler)) {
+        if (method !== "") result.push({ method, path, handler });
+      }
+    }
   }
 
   getStats() {

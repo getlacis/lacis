@@ -92,6 +92,35 @@ describe('routing — request body', () => {
   });
 });
 
+describe('routing — param name consistency', () => {
+  it('GET and POST on the same path share the param name correctly', async () => {
+    const app = createTestApp({
+      routes: [
+        {
+          path: '/users/:id',
+          handlers: {
+            GET:  async (req: Request, res: Response) => res.status(200).json({ method: 'GET',  id: req.params?.id }),
+            POST: async (req: Request, res: Response) => res.status(200).json({ method: 'POST', id: req.params?.id }),
+          },
+        },
+      ],
+    });
+    await app.get('/users/42').expect(200).expect({ method: 'GET', id: '42' });
+    await app.post('/users/99').expect(200).expect({ method: 'POST', id: '99' });
+  });
+
+  it('throws at registration when two methods use different param names at the same position', () => {
+    expect(() =>
+      createTestApp({
+        routes: [
+          { path: '/users/:id',     handlers: { GET:  async (_req: Request, res: Response) => res.json({}) } },
+          { path: '/users/:userId', handlers: { POST: async (_req: Request, res: Response) => res.json({}) } },
+        ],
+      }),
+    ).toThrow(/param name.*userId.*conflicts.*id/);
+  });
+});
+
 describe('routing — query string', () => {
   it('preserves query string in req.url', async () => {
     const app = createTestApp({

@@ -112,5 +112,25 @@ describe('Router', () => {
       router.addRoute('POST', '/b', jest.fn());
       expect(getRouterStats().routeCount).toBe(2);
     });
+
+    it('does not double-count when overwriting an existing method on the same route', () => {
+      router.addRoute('GET', '/items', jest.fn());
+      router.addRoute('GET', '/items', jest.fn());
+      expect(getRouterStats().routeCount).toBe(1);
+    });
+  });
+
+  describe('param name conflict', () => {
+    it('throws when a different param name is used at the same path position', () => {
+      router.addRoute('GET', '/users/[id]', jest.fn());
+      expect(() => router.addRoute('POST', '/users/[userId]', jest.fn())).toThrow(
+        /param name.*userId.*conflicts.*id/
+      );
+    });
+
+    it('allows the same param name on different methods at the same position', () => {
+      router.addRoute('GET', '/users/[id]', jest.fn());
+      expect(() => router.addRoute('POST', '/users/[id]', jest.fn())).not.toThrow();
+    });
   });
 });
