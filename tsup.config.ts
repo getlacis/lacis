@@ -1,5 +1,7 @@
 import { defineConfig } from 'tsup';
 
+const openApiExternals = ['zod', 'zod-to-json-schema', '@valibot/to-json-schema']
+
 export default defineConfig([
   {
     entry: ['src/index.ts'],
@@ -10,6 +12,7 @@ export default defineConfig([
     platform: 'node',
     sourcemap: false,
     treeshake: true,
+    external: openApiExternals,
   },
   {
     entry: { index: 'src/adapters/index.ts' },
@@ -29,6 +32,5 @@ export default defineConfig([
     sourcemap: false,
     treeshake: true,
     banner: { js: '#!/usr/bin/env node' },
-    onSuccess: 'cp -r src/cli/templates dist/cli/templates',
   },
 ]);
