@@ -20,7 +20,7 @@ import type {
 
 const MAX_BODY_SIZE = 10_485_760; // 10 MB
 
-export interface ZenoHeaders {
+export interface LacisHeaders {
   get(name: string): string | null;
   has(name: string): boolean;
   forEach(cb: (value: string, key: string) => void): void;
@@ -89,10 +89,10 @@ export class ResponseCookiesImpl {
 }
 
 function parseCookieHeader(
-  headers: ZenoHeaders | Record<string, string | string[] | undefined>,
+  headers: LacisHeaders | Record<string, string | string[] | undefined>,
 ): string | undefined {
-  if (typeof (headers as ZenoHeaders).get === 'function') {
-    return (headers as ZenoHeaders).get('cookie') ?? undefined;
+  if (typeof (headers as LacisHeaders).get === 'function') {
+    return (headers as LacisHeaders).get('cookie') ?? undefined;
   }
   const raw = (headers as Record<string, string | string[] | undefined>)['cookie'];
   if (Array.isArray(raw)) return raw.join('; ');
@@ -103,7 +103,7 @@ function parseCookieHeader(
 
 export type RequestMixinBase = new (...args: any[]) => {
   params: Record<string, string>;
-  headers: ZenoHeaders | Record<string, string | string[] | undefined>;
+  headers: LacisHeaders | Record<string, string | string[] | undefined>;
 };
 
 export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
@@ -112,8 +112,8 @@ export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
 
     getHeader(name: string): string | undefined {
       const h = this.headers;
-      if (typeof (h as ZenoHeaders).get === 'function') {
-        return (h as ZenoHeaders).get(name) ?? undefined;
+      if (typeof (h as LacisHeaders).get === 'function') {
+        return (h as LacisHeaders).get(name) ?? undefined;
       }
       const val = (h as Record<string, string | string[] | undefined>)[name.toLowerCase()];
       return Array.isArray(val) ? val[0] : val;
@@ -135,8 +135,8 @@ export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
       return new Promise((resolve, reject) => {
         const headers = this.headers;
         const contentType =
-          typeof (headers as ZenoHeaders).get === "function"
-            ? ((headers as ZenoHeaders).get("content-type") ?? "")
+          typeof (headers as LacisHeaders).get === "function"
+            ? ((headers as LacisHeaders).get("content-type") ?? "")
             : (((headers as Record<string, string | string[] | undefined>)["content-type"]) as string ?? "");
 
         if (!contentType.startsWith("multipart/form-data")) {
@@ -315,7 +315,7 @@ export function withResponseMethods<T extends ResponseMixinBase>(Base: T) {
 // Note: end() is intentionally NOT copied — applyResponseMethods wraps it per-instance
 class _ReqBase {
   params: Record<string, string> = {};
-  headers: ZenoHeaders | Record<string, string | string[] | undefined> = {};
+  headers: LacisHeaders | Record<string, string | string[] | undefined> = {};
   body() { return nodeBody.call(this); }
 }
 const _reqProto = withRequestMethods(_ReqBase).prototype;

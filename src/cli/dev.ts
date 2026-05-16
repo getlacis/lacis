@@ -37,7 +37,7 @@ export async function dev(routesDir: string): Promise<void> {
 
   const platform = detectPlatform(cwd)
 
-  console.log(`[zeno] Detected platform: ${platform}`)
+  console.log(`[lacis] Detected platform: ${platform}`)
 
   // Generate manifest and start watcher before spawning the platform CLI.
   // watchRoutes awaits generateManifest internally, so the manifest exists
@@ -45,7 +45,7 @@ export async function dev(routesDir: string): Promise<void> {
   await watchRoutes(routesDir)
 
   if (platform === 'node') {
-    console.log('[zeno] Node mode: watching routes for changes...')
+    console.log('[lacis] Node mode: watching routes for changes...')
     return
   }
 
@@ -60,9 +60,9 @@ export async function dev(routesDir: string): Promise<void> {
         platform === 'netlify'
           ? 'npm i -g netlify-cli'
           : 'npm i -g vercel'
-      console.error(`[zeno] ${cmd} CLI not found. Install it with: ${install}`)
+      console.error(`[lacis] ${cmd} CLI not found. Install it with: ${install}`)
     } else {
-      console.error(`[zeno] Failed to start ${cmd} dev:`, err.message)
+      console.error(`[lacis] Failed to start ${cmd} dev:`, err.message)
     }
   })
 

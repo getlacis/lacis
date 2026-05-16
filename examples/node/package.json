@@ -1,5 +1,5 @@
 {
-  "name": "zeno-examples",
+  "name": "lacis-examples",
   "module": "server.ts",
   "type": "module",
   "devDependencies": {
@@ -11,7 +11,7 @@
     "dev": "NODE_ENV=development bun --watch server.ts"
   },
   "dependencies": {
-    "zeno": "file:../../"
+    "lacis": "file:../../"
   },
   "peerDependencies": {
     "typescript": "^5.8.2"

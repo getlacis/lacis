@@ -32,7 +32,7 @@ export const vercelAdapter: Adapter = {
       applyRequestMethods(vercelReq);
       applyResponseMethods(vercelRes);
 
-      // Single cast: Vercel's types omit the zeno-specific methods we just applied
+      // Single cast: Vercel's types omit the lacis-specific methods we just applied
       const req = vercelReq as unknown as Request;
       const res = vercelRes as unknown as Response;
 
@@ -60,7 +60,7 @@ export const vercelAdapter: Adapter = {
 
         if (hasMiddlewares()) await runMiddlewares("afterRequest", req, res);
       } catch (error) {
-        console.error("[zeno/vercel] Handler error:", error);
+        console.error("[lacis/vercel] Handler error:", error);
         if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
         if (!res.headersSent) {
           res.status(500).json({ error: "Internal server error" });

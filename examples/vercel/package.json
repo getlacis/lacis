@@ -1,10 +1,10 @@
 {
-  "name": "zeno-example-vercel",
+  "name": "lacis-example-vercel",
   "version": "1.0.0",
   "type": "module",
   "private": true,
   "scripts": {},
   "dependencies": {
-    "zeno": "file:../../"
+    "lacis": "file:../../"
   }
 }

@@ -1,6 +1,6 @@
 {
-  "name": "zeno",
-  "version": "0.2.0",
+  "name": "lacis",
+  "version": "0.2.2",
   "description": "Zero-dependency TypeScript web framework",
   "type": "module",
   "module": "index.ts",
@@ -50,7 +50,7 @@
     }
   },
   "bin": {
-    "zeno": "./dist/cli/index.js"
+    "lacis": "dist/cli/index.js"
   },
   "scripts": {
     "build": "tsup",

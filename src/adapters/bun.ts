@@ -9,7 +9,7 @@ import type { Adapter, ServerConfig, ServerlessConfig, SSEOptions } from "@/type
 import {
   withRequestMethods,
   withResponseMethods,
-  type ZenoHeaders,
+  type LacisHeaders,
 } from "@/utils/adapter-base";
 import { primaryLog } from "@/utils/logs";
 import os from "os";
@@ -21,7 +21,7 @@ class _BunRequestBase {
   params: Record<string, string> = {};
   url: string;
   method: string;
-  headers: ZenoHeaders;
+  headers: LacisHeaders;
   socket = { setTimeout: (_: number) => {} } as const;
   connection: { remoteAddress: string };
   private _req: Request;
@@ -30,7 +30,7 @@ class _BunRequestBase {
     this._req = req;
     this.url = pathname + search;
     this.method = req.method;
-    this.headers = req.headers as unknown as ZenoHeaders;
+    this.headers = req.headers as unknown as LacisHeaders;
     this.connection = {
       remoteAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
     };
@@ -147,7 +147,7 @@ class _BunResponseBase {
 
   _initSseStream() {
     if (this._sseWindowClosed)
-      throw new Error("[zeno/bun] initSSE() must be called synchronously before any `await` in your handler.");
+      throw new Error("[lacis/bun] initSSE() must be called synchronously before any `await` in your handler.");
     const { readable, writable } = new TransformStream<Uint8Array>();
     this._sseReadable = readable;
     this._sseWriter = writable.getWriter();
@@ -179,8 +179,8 @@ export const bunAdapter: Adapter = {
     return async (config: ServerConfig = {}) => {
       const { isDev, port = 3000, defaultHeaders, cluster: clusterConfig } = config;
 
-      // ZENO_BUN_WORKER contains the primary's PID so workers can detect parent death
-      const primaryPid = parseInt(process.env.ZENO_BUN_WORKER ?? '0');
+      // LACIS_BUN_WORKER contains the primary's PID so workers can detect parent death
+      const primaryPid = parseInt(process.env.LACIS_BUN_WORKER ?? '0');
       const isWorker = primaryPid > 0;
 
       if (clusterConfig?.enabled && !isWorker) {
@@ -189,7 +189,7 @@ export const bunAdapter: Adapter = {
 
         const procs = Array.from({ length: numWorkers }, () =>
           Bun.spawn(process.argv, {
-            env: { ...process.env as Record<string, string>, ZENO_BUN_WORKER: String(process.pid) },
+            env: { ...process.env as Record<string, string>, LACIS_BUN_WORKER: String(process.pid) },
             stdout: 'ignore',
             stderr: 'inherit',
           })

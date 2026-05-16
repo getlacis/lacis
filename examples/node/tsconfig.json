@@ -4,8 +4,8 @@
     "rootDir": "../../",
     "types": ["bun-types"],
     "paths": {
-      "zeno": ["../../src/index.ts"],
-      "zeno/adapters": ["../../src/adapters/index.ts"],
+      "lacis": ["../../src/index.ts"],
+      "lacis/adapters": ["../../src/adapters/index.ts"],
       "@/*": ["../../src/*"],
       "@core/*": ["../../src/core/*"]
     }

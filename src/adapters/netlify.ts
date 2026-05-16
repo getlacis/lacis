@@ -22,7 +22,7 @@ export const netlifyAdapter: Adapter = {
     if (typeof config === "string") {
       throw new Error(
         "netlifyAdapter.createHandler() requires a ServerlessConfig object. " +
-        "Run `zeno build` to generate routes/_manifest.ts and pass { routes } instead."
+        "Run `lacis build` to generate routes/_manifest.ts and pass { routes } instead."
       );
     }
 
@@ -91,7 +91,7 @@ export const netlifyAdapter: Adapter = {
       applyRequestMethods(rawReq);
       applyResponseMethods(rawRes);
 
-      // Single cast: IncomingMessage/ServerResponse don't know about the zeno methods we just applied
+      // Single cast: IncomingMessage/ServerResponse don't know about the lacis methods we just applied
       const req = rawReq as unknown as Request;
       const res = rawRes as unknown as Response;
 
@@ -124,7 +124,7 @@ export const netlifyAdapter: Adapter = {
 
         return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
       } catch (error) {
-        console.error("[zeno/netlify] Handler error:", error);
+        console.error("[lacis/netlify] Handler error:", error);
         if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
         if (!headersSent) {
           return { statusCode: 500, body: JSON.stringify({ error: "Internal server error" }) };

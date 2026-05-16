@@ -1,4 +1,4 @@
-import type { Request, Response } from 'zeno';
+import type { Request, Response } from 'lacis';
 
 export const beforeRequest = async (req: Request, res: Response) => {
   console.log(`[API] Request: ${req.method} ${req.url}`);

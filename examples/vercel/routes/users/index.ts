@@ -1,4 +1,4 @@
-import type { Request, Response } from 'zeno'
+import type { Request, Response } from 'lacis'
 
 const users = [
   { id: 1, name: 'Alice' },

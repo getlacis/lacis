@@ -56,7 +56,7 @@ describe('routing — dynamic params', () => {
         },
       }],
     });
-    await app.get('/orgs/acme/repos/zeno').expect(200).expect({ org: 'acme', repo: 'zeno' });
+    await app.get('/orgs/acme/repos/lacis').expect(200).expect({ org: 'acme', repo: 'lacis' });
   });
 
   it('static segment takes priority over param when both match', async () => {
@@ -86,9 +86,9 @@ describe('routing — request body', () => {
     });
     await app.post('/echo')
       .set('Content-Type', 'application/json')
-      .send({ name: 'zeno' })
+      .send({ name: 'lacis' })
       .expect(200)
-      .expect({ name: 'zeno' });
+      .expect({ name: 'lacis' });
   });
 });
 

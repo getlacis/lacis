@@ -82,7 +82,7 @@ describe('withRequestMethods', () => {
 
   describe('json()', () => {
     it('parses a valid JSON body', async () => {
-      const payload = { name: 'zeno', version: 1 };
+      const payload = { name: 'lacis', version: 1 };
       const req = makeReq(JSON.stringify(payload), { 'content-type': 'application/json' });
       const data = await req.json<typeof payload>();
       expect(data).toEqual(payload);

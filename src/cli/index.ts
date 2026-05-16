@@ -20,14 +20,14 @@ function parseArgs(argv: string[]) {
 
 function printHelp() {
   console.log(`
-Usage: zeno <command> [options]
+Usage: lacis <command> [options]
 
 Commands:
   build             Generate routes/_manifest.ts
   watch             Watch routes and regenerate manifest on changes
   dev               Auto-detect platform and start dev server
 
-To scaffold a new project: npm create zeno@latest
+To scaffold a new project: npm create lacis@latest
 
 Options:
   --routes <dir>    Path to routes directory (default: ./routes)
@@ -57,6 +57,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[zeno]', err)
+  console.error('[lacis]', err)
   process.exit(1)
 })

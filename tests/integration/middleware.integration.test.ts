@@ -52,11 +52,11 @@ describe('middleware — beforeRequest', () => {
       }],
       middleware: {
         beforeRequest: async (req: Request) => {
-          (req as any).headers['x-powered-by'] = 'zeno';
+          (req as any).headers['x-powered-by'] = 'lacis';
         },
       },
     });
-    await app.get('/api').expect(200).expect({ powered: 'zeno' });
+    await app.get('/api').expect(200).expect({ powered: 'lacis' });
   });
 });
 

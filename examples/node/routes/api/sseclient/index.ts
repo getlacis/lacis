@@ -1,5 +1,5 @@
-import { createSSEClient } from 'zeno';
-import type { Request, Response } from 'zeno';
+import { createSSEClient } from 'lacis';
+import type { Request, Response } from 'lacis';
 
 export async function GET(_req: Request, res: Response) {
   res.initSSE();

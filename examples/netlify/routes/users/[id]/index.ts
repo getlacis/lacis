@@ -1,4 +1,4 @@
-import type { Request, Response } from 'zeno'
+import type { Request, Response } from 'lacis'
 
 const users: Record<string, { id: number; name: string }> = {
   '1': { id: 1, name: 'Alice' },

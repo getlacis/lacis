@@ -1,4 +1,4 @@
-# Zeno
+# Lacis
 
 Zero-dependency TypeScript web framework with file-based routing.
 
@@ -16,15 +16,15 @@ Zero-dependency TypeScript web framework with file-based routing.
 ## Installation
 
 ```bash
-npm install zeno
+npm install lacis
 ```
 
 ## CLI
 
 ```bash
-zeno dev            # start dev server (auto-detects platform)
-zeno build          # generate routes/_manifest.ts
-zeno watch          # watch routes and regenerate manifest on changes
+lacis dev            # start dev server (auto-detects platform)
+lacis build          # generate routes/_manifest.ts
+lacis watch          # watch routes and regenerate manifest on changes
 ```
 
 All commands accept `--routes <dir>` to override the default `./routes` directory.
@@ -55,7 +55,7 @@ Each file in `routes/` exports named HTTP method handlers or a default export.
 
 ```ts
 // routes/users/index.ts
-import type { Request, Response } from 'zeno'
+import type { Request, Response } from 'lacis'
 
 export async function GET(req: Request, res: Response) {
   res.status(200).json({ users: [] })
@@ -118,7 +118,7 @@ export async function GET(req: Request, res: Response) {
 
 ```ts
 // routes/users/[id]/index.ts
-import { defineHandler } from 'zeno'
+import { defineHandler } from 'lacis'
 import { z } from 'zod'
 
 export const GET = defineHandler({
@@ -200,7 +200,7 @@ Create a `+middleware.ts` file in any route directory. It applies to all routes 
 
 ```ts
 // routes/api/+middleware.ts
-import type { Request, Response } from 'zeno'
+import type { Request, Response } from 'lacis'
 
 export const beforeRequest = async (req: Request, res: Response) => {
   if (!req.getHeader('authorization')) {
@@ -247,12 +247,12 @@ createServer(routesDir, {
 })
 ```
 
-`origin: '*'` is incompatible with `credentials: true` — Zeno reflects the actual origin automatically in that case.
+`origin: '*'` is incompatible with `credentials: true` — Lacis reflects the actual origin automatically in that case.
 
 You can also create a standalone middleware:
 
 ```ts
-import { createCorsMiddleware } from 'zeno'
+import { createCorsMiddleware } from 'lacis'
 
 const cors = createCorsMiddleware({ origin: '*' })
 ```
@@ -260,7 +260,7 @@ const cors = createCorsMiddleware({ origin: '*' })
 ## Rate limiting
 
 ```ts
-import { createRateLimit } from 'zeno'
+import { createRateLimit } from 'lacis'
 
 createServer(routesDir, {
   middleware: {
@@ -282,7 +282,7 @@ Sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers o
 
 ```ts
 // routes/stream/index.ts
-import type { Request, Response } from 'zeno'
+import type { Request, Response } from 'lacis'
 
 export async function GET(req: Request, res: Response) {
   res.initSSE()
@@ -307,7 +307,7 @@ export async function GET(req: Request, res: Response) {
 **Client**
 
 ```ts
-import { createSSEClient } from 'zeno'
+import { createSSEClient } from 'lacis'
 
 const client = await createSSEClient('http://localhost:3000/stream')
 
@@ -333,7 +333,7 @@ createSSEClient(url, {
 ## Server configuration
 
 ```ts
-import { createServer } from 'zeno'
+import { createServer } from 'lacis'
 
 createServer(routesDir, {
   port: 3000,
@@ -342,7 +342,7 @@ createServer(routesDir, {
   timeout: 30000,
 
   defaultHeaders: {
-    'X-Powered-By': 'Zeno',
+    'X-Powered-By': 'Lacis',
   },
 
   httpsOptions: {
@@ -375,7 +375,7 @@ createServer(routesDir, {
 ## Adapters
 
 ```ts
-import { createServer, getRoutesDir } from 'zeno'
+import { createServer, getRoutesDir } from 'lacis'
 
 // Node.js
 createServer(getRoutesDir(), { platform: 'node' })

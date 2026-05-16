@@ -16,6 +16,7 @@ export default defineConfig([
     platform: 'node',
     sourcemap: false,
     treeshake: true,
+    minify: true,
     external: openApiExternals,
   },
   {
@@ -26,6 +27,7 @@ export default defineConfig([
     platform: 'node',
     sourcemap: false,
     treeshake: true,
+    minify: true,
     banner: { js: '#!/usr/bin/env node' },
   },
 ]);

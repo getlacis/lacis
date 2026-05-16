@@ -15,7 +15,7 @@ async function createServer(
   config: ServerConfig = defaultConfig
 ) {
   const { platform = 'node' } = config;
-  const verbose = config.isDev && cluster.isPrimary && !process.env.ZENO_BUN_WORKER;
+  const verbose = config.isDev && cluster.isPrimary && !process.env.LACIS_BUN_WORKER;
   
   try {
     await loadRoutes(routesDir);

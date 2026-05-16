@@ -19,15 +19,15 @@ import http from "http";
 import https from "https";
 import os from "os";
 
-class _ZenoRequestBase extends http.IncomingMessage {
+class _LacisRequestBase extends http.IncomingMessage {
   params: Record<string, string> = {};
   body = nodeBody;
 }
 
-class ZenoRequest extends withRequestMethods(_ZenoRequestBase) {}
+class LacisRequest extends withRequestMethods(_LacisRequestBase) {}
 
-class ZenoResponse extends withResponseMethods(
-  http.ServerResponse<ZenoRequest>,
+class LacisResponse extends withResponseMethods(
+  http.ServerResponse<LacisRequest>,
 ) {}
 
 export const nodeAdapter: Adapter = {
@@ -107,8 +107,8 @@ export const nodeAdapter: Adapter = {
         registerMiddlewareConfig(config.middleware);
 
         const handleRequest = async (
-          req: ZenoRequest,
-          res: ZenoResponse,
+          req: LacisRequest,
+          res: LacisResponse,
           requestTracker: any,
         ) => {
           try {
@@ -187,8 +187,8 @@ export const nodeAdapter: Adapter = {
           }
 
           handleRequest(
-            req as unknown as ZenoRequest,
-            res as unknown as ZenoResponse,
+            req as unknown as LacisRequest,
+            res as unknown as LacisResponse,
             requestTracker,
           ).catch((err) => {
             if (isDev) console.error("Fatal error:", err);
@@ -202,8 +202,8 @@ export const nodeAdapter: Adapter = {
 
         // http.createServer accepts custom IncomingMessage/ServerResponse subclasses so Node instantiates our versions per request
         const serverOptions = {
-          IncomingMessage: ZenoRequest,
-          ServerResponse: ZenoResponse,
+          IncomingMessage: LacisRequest,
+          ServerResponse: LacisResponse,
         } as any;
         const server = config.httpsOptions
           ? https.createServer(

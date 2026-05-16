@@ -1,5 +1,5 @@
 {
-  "name": "zeno-example-netlify",
+  "name": "lacis-example-netlify",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -8,6 +8,6 @@
     "dev": "node ../../dist/cli/index.js dev"
   },
   "dependencies": {
-    "zeno": "file:../../"
+    "lacis": "file:../../"
   }
 }

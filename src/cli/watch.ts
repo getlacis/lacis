@@ -11,11 +11,11 @@ export async function watchRoutes(routesDir: string): Promise<void> {
 
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(async () => {
-      console.log(`[zeno] Route changed: ${filename}, regenerating manifest...`)
+      console.log(`[lacis] Route changed: ${filename}, regenerating manifest...`)
       try {
         await generateManifest(routesDir)
       } catch (err) {
-        console.error('[zeno] Failed to regenerate manifest:', err)
+        console.error('[lacis] Failed to regenerate manifest:', err)
       }
     }, 100)
   })

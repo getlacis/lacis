@@ -162,13 +162,13 @@ describe("netlifyAdapter handler", () => {
     await handler(
       event({
         httpMethod: "POST",
-        body: JSON.stringify({ name: "zeno" }),
+        body: JSON.stringify({ name: "lacis" }),
         headers: { "content-type": "application/json" },
       }),
       {},
     );
 
-    expect(capturedBody?.toString()).toBe('{"name":"zeno"}');
+    expect(capturedBody?.toString()).toBe('{"name":"lacis"}');
   });
 
   it("makes the body parseable via req.json()", async () => {

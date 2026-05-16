@@ -270,7 +270,7 @@ describe('nodeAdapter — request handling', () => {
   it('sets default headers on every response when defaultHeaders is configured', async () => {
     const { listener: l, httpSpy: spy } = await startAndCapture({
       ...baseConfig,
-      defaultHeaders: { 'x-powered-by': 'zeno' },
+      defaultHeaders: { 'x-powered-by': 'lacis' },
     });
 
     mockFindRoute.mockReturnValue({
@@ -282,7 +282,7 @@ describe('nodeAdapter — request handling', () => {
     l(req, res);
     await ended;
 
-    expect(res.getHeader('x-powered-by')).toBe('zeno');
+    expect(res.getHeader('x-powered-by')).toBe('lacis');
     spy.mockRestore();
   });
 });

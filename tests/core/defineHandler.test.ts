@@ -124,10 +124,10 @@ describe('defineHandler', () => {
         body: okSchema(),
         handler: async (req) => { received = (req as any).body },
       })
-      const req = makeReq({ jsonBody: { name: 'zeno' } })
+      const req = makeReq({ jsonBody: { name: 'lacis' } })
       const { res } = makeRes()
       await handler(req, res)
-      expect(received).toEqual({ name: 'zeno' })
+      expect(received).toEqual({ name: 'lacis' })
     })
 
     it('returns 400 and skips handler on body schema failure', async () => {

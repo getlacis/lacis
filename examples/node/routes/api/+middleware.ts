@@ -1,4 +1,4 @@
-import type { Request, Response } from 'zeno';
+import type { Request, Response } from 'lacis';
 
 export const beforeRequest = (req: Request, res: Response) => {
   res.setHeader("X-Root-Middleware", "true");

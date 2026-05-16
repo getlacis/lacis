@@ -158,9 +158,9 @@ describe('defineHandler integration', () => {
       await app
         .post('/users')
         .set('Content-Type', 'application/json')
-        .send({ name: 'zeno' })
+        .send({ name: 'lacis' })
         .expect(201)
-        .expect({ name: 'zeno' })
+        .expect({ name: 'lacis' })
     })
 
     it('responds 400 when body schema fails', async () => {
