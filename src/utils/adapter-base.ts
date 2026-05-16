@@ -1,3 +1,5 @@
+import { hasMiddlewares, runMiddlewares } from "@/core/middleware";
+import type { Request, Response } from "@/types";
 import { createSSEClient } from "@/sse/client";
 import {
   initSSE,
@@ -336,6 +338,11 @@ export function applyRequestMethods(req: any): void {
   req.getHeader = _reqProto.getHeader;
   req.createSSEClient = _reqProto.createSSEClient;
   req.cookies = new RequestCookiesImpl(parseCookieHeader(req.headers));
+}
+
+export async function handleAdapterError(req: Request, res: Response, error: unknown): Promise<void> {
+  console.error("[lacis] Unhandled error:", error);
+  if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
 }
 
 export function applyResponseMethods(res: any): void {

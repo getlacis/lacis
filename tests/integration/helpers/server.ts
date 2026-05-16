@@ -4,7 +4,7 @@ import supertest from 'supertest';
 import { findRoute, registerRoutes, resetRouter } from '@/core/router';
 import { hasMiddlewares, registerMiddlewareConfig, resetMiddlewares, runMiddlewares } from '@/core/middleware';
 import { registerCorsConfig } from '@/core/cors';
-import { nodeBody, withRequestMethods, withResponseMethods } from '@/utils/adapter-base';
+import { handleAdapterError, nodeBody, withRequestMethods, withResponseMethods } from '@/utils/adapter-base';
 import type { CorsConfig, ServerlessRoute } from '@/types';
 import type { MiddlewareCallback } from '@/types/middleware';
 
@@ -62,7 +62,8 @@ export function createTestApp(options: TestServerOptions = {}) {
 
         if (hasMiddlewares()) await runMiddlewares('afterRequest', req as any, res as any);
         if (!res.headersSent) res.end();
-      } catch {
+      } catch (error) {
+        await handleAdapterError(req as any, res as any, error);
         if (!res.headersSent) res.status(500).json({ error: 'Internal Server Error' });
       }
     },

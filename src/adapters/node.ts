@@ -7,6 +7,7 @@ import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import {
+  handleAdapterError,
   nodeBody,
   withRequestMethods,
   withResponseMethods,
@@ -162,11 +163,9 @@ export const nodeAdapter: Adapter = {
             if (!res.headersSent) res.end();
             requestTracker?.end(res.statusCode || 200);
           } catch (error) {
-            if (isDev) console.error("Error:", error);
+            await handleAdapterError(req as any, res as any, error);
             if (!res.headersSent)
               res.status(500).json({ error: "Internal Server Error" });
-            if (hasMiddlewares())
-              await runMiddlewares("onError", req as any, res as any);
             requestTracker?.end(res.statusCode || 500, true);
           }
         };

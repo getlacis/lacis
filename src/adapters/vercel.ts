@@ -2,7 +2,7 @@ import type { Adapter, ServerlessConfig, VercelRequest, VercelResponse, Request,
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
 import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
-import { applyRequestMethods, applyResponseMethods } from "@/utils/adapter-base";
+import { applyRequestMethods, applyResponseMethods, handleAdapterError } from "@/utils/adapter-base";
 
 export const vercelAdapter: Adapter = {
   name: "vercel",
@@ -60,11 +60,8 @@ export const vercelAdapter: Adapter = {
 
         if (hasMiddlewares()) await runMiddlewares("afterRequest", req, res);
       } catch (error) {
-        console.error("[lacis/vercel] Handler error:", error);
-        if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Internal server error" });
-        }
+        await handleAdapterError(req, res, error);
+        if (!res.headersSent) res.status(500).json({ error: "Internal server error" });
       }
     };
   },

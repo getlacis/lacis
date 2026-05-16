@@ -198,6 +198,26 @@ describe('bunAdapter — middleware', () => {
     await fetch(makeRequest('/'));
     expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything());
   });
+
+  it('calls onError with { error } when route handler throws', async () => {
+    const fetch = await startAndCaptureFetch();
+    mockFindRoute.mockReturnValue(makeRoute(async () => { throw new Error('boom'); }));
+    const res = await fetch(makeRequest('/'));
+    expect(res.status).toBe(500);
+    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything(), { error: expect.any(Error) });
+  });
+
+  it('does not send 500 fallback if onError already responded', async () => {
+    const fetch = await startAndCaptureFetch();
+    mockFindRoute.mockReturnValue(makeRoute(async () => { throw new Error('boom'); }));
+    mockRunMiddlewares.mockImplementation(async (type: string, _req: LacisRequest, res: LacisResponse) => {
+      if (type === 'onError') res.status(503).json({ error: 'custom' });
+      return true;
+    });
+    const result = await fetch(makeRequest('/'));
+    expect(result.status).toBe(503);
+    expect(await result.json()).toEqual({ error: 'custom' });
+  });
 });
 
 describe('bunAdapter — SSE', () => {

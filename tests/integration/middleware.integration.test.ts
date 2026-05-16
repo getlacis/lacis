@@ -98,6 +98,45 @@ describe('middleware — response headers', () => {
   });
 });
 
+describe('middleware — onError', () => {
+  it('calls onError when the route handler throws', async () => {
+    let onErrorCalled = false;
+    const app = createTestApp({
+      routes: [{
+        path: '/api',
+        handlers: {
+          GET: async () => { throw new Error('boom'); },
+        },
+      }],
+      middleware: {
+        onError: async (_req: Request, res: Response) => {
+          onErrorCalled = true;
+          res.status(500).json({ error: 'custom error' });
+        },
+      },
+    });
+    await app.get('/api').expect(500).expect({ error: 'custom error' });
+    expect(onErrorCalled).toBe(true);
+  });
+
+  it('does not send 500 fallback if onError already responded', async () => {
+    const app = createTestApp({
+      routes: [{
+        path: '/api',
+        handlers: {
+          GET: async () => { throw new Error('boom'); },
+        },
+      }],
+      middleware: {
+        onError: async (_req: Request, res: Response) => {
+          res.status(503).json({ error: 'service unavailable' });
+        },
+      },
+    });
+    await app.get('/api').expect(503).expect({ error: 'service unavailable' });
+  });
+});
+
 describe('middleware — multiple handlers', () => {
   it('runs an array of beforeRequest middlewares in order', async () => {
     const order: number[] = [];

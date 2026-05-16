@@ -7,6 +7,7 @@ import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig, SSEOptions } from "@/types";
 import {
+  handleAdapterError,
   withRequestMethods,
   withResponseMethods,
   type LacisHeaders,
@@ -300,26 +301,26 @@ export const bunAdapter: Adapter = {
             // Regular request: wait for the handler to complete
             await handlerDone;
 
-            if (handlerError && !res.headersSent) {
-              return new Response(
-                JSON.stringify({ error: "Internal Server Error" }),
-                {
-                  status: 500,
-                  headers: { "Content-Type": "application/json" },
-                },
-              );
+            if (handlerError) {
+              await handleAdapterError(req as any, res as any, handlerError);
+              if (!res.headersSent) {
+                return new Response(
+                  JSON.stringify({ error: "Internal Server Error" }),
+                  { status: 500, headers: { "Content-Type": "application/json" } },
+                );
+              }
             }
 
             return buildResponse(res);
           } catch (error) {
-            if (isDev) console.error("Server error:", error);
-            return new Response(
-              JSON.stringify({ error: "Internal Server Error" }),
-              {
-                status: 500,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
+            await handleAdapterError(req as any, res as any, error);
+            if (!res.headersSent) {
+              return new Response(
+                JSON.stringify({ error: "Internal Server Error" }),
+                { status: 500, headers: { "Content-Type": "application/json" } },
+              );
+            }
+            return buildResponse(res);
           }
         },
       });

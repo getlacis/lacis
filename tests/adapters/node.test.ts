@@ -253,7 +253,7 @@ describe('nodeAdapter — request handling', () => {
     expect(order.indexOf('handler')).toBeLessThan(order.indexOf('afterRequest'));
   });
 
-  it('returns 500 and calls onError when route handler throws', async () => {
+  it('returns 500 and calls onError with { error } when route handler throws', async () => {
     mockFindRoute.mockReturnValue({
       handler: async () => { throw new Error('boom'); },
       params: {},
@@ -264,7 +264,24 @@ describe('nodeAdapter — request handling', () => {
     await ended;
 
     expect(res.statusCode).toBe(500);
-    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything());
+    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything(), { error: expect.any(Error) });
+  });
+
+  it('does not send 500 fallback if onError already responded', async () => {
+    mockFindRoute.mockReturnValue({
+      handler: async () => { throw new Error('boom'); },
+      params: {},
+    });
+    mockRunMiddlewares.mockImplementation(async (type: string, _req: any, res: any) => {
+      if (type === 'onError') { res.status(503).json({ error: 'custom' }); }
+      return true;
+    });
+
+    const { req, res, ended } = makeReqRes('/users');
+    listener(req, res);
+    await ended;
+
+    expect(res.statusCode).toBe(503);
   });
 
   it('sets default headers on every response when defaultHeaders is configured', async () => {

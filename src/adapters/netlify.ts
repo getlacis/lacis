@@ -2,7 +2,7 @@ import type { Adapter, ServerlessConfig, NetlifyEvent, NetlifyContext, Request, 
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
 import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
-import { applyRequestMethods, applyResponseMethods } from "@/utils/adapter-base";
+import { applyRequestMethods, applyResponseMethods, handleAdapterError } from "@/utils/adapter-base";
 import { IncomingMessage, ServerResponse } from "http";
 import { Socket } from "net";
 
@@ -125,8 +125,7 @@ export const netlifyAdapter: Adapter = {
 
         return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
       } catch (error) {
-        console.error("[lacis/netlify] Handler error:", error);
-        if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
+        await handleAdapterError(req, res, error);
         if (!headersSent) {
           return { statusCode: 500, body: JSON.stringify({ error: "Internal server error" }) };
         }
