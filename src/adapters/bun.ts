@@ -229,7 +229,7 @@ export const bunAdapter: Adapter = {
           const url = new URL(request.url);
           const pathname = url.pathname;
 
-          const req = new BunRequest(request, pathname, url.search, server?.requestIP?.(request)?.address ?? "");
+          const req = new BunRequest(request, pathname, url.search, server?.requestIP(request)?.address ?? "");
           const res = new BunResponse();
 
           try {
