@@ -5,26 +5,40 @@ on:
     types: [published]
 
 jobs:
-  build-and-upload:
+  build-and-publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm to latest
+        run: npm install -g npm@latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
+
+      - name: Sync version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          npm version $VERSION --no-git-tag-version
 
       - name: Run tests
-        run: npm test
+        run: bun run test
 
       - name: Build
-        run: npm run build
+        run: bun run build
 
       - name: Zip dist
         run: zip -r lacis-${{ github.event.release.tag_name }}.zip dist/
@@ -33,3 +47,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.event.release.tag_name }}" "lacis-${{ github.event.release.tag_name }}.zip" --clobber
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public

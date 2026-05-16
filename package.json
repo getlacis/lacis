@@ -1,7 +1,8 @@
 {
   "name": "lacis",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Zero-dependency TypeScript web framework",
+  "license": "MIT",
   "type": "module",
   "module": "index.ts",
   "main": "./dist/index.js",
