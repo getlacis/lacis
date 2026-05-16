@@ -27,9 +27,9 @@ jobs:
         run: npm run build
 
       - name: Zip dist
-        run: zip -r zeno-${{ github.event.release.tag_name }}.zip dist/
+        run: zip -r lacis-${{ github.event.release.tag_name }}.zip dist/
 
       - name: Upload dist to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" "zeno-${{ github.event.release.tag_name }}.zip" --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" "lacis-${{ github.event.release.tag_name }}.zip" --clobber
