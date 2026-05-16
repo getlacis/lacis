@@ -23,9 +23,16 @@ import { netlifyAdapter } from "@/adapters/netlify";
 
 function event(overrides: Partial<NetlifyEvent> = {}): NetlifyEvent {
   return {
+    rawUrl: "http://localhost/users",
+    rawQuery: "",
     path: "/users",
     httpMethod: "GET",
     headers: {},
+    multiValueHeaders: {},
+    queryStringParameters: null,
+    multiValueQueryStringParameters: null,
+    body: null,
+    isBase64Encoded: false,
     ...overrides,
   };
 }

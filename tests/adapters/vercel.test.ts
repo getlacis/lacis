@@ -29,6 +29,7 @@ function makeVercelReq(overrides: Partial<VercelRequest> = {}): VercelRequest {
     url: '/users',
     method: 'GET',
     headers: {},
+    cookies: {},
     ...overrides,
   };
 }

@@ -52,7 +52,8 @@ export const netlifyAdapter: Adapter = {
       (rawReq as any).headers = event.headers;
 
       if (event.body) {
-        rawReq.push(Buffer.from(event.body, "utf-8"));
+        const encoding = event.isBase64Encoded ? "base64" : "utf-8";
+        rawReq.push(Buffer.from(event.body, encoding));
       }
       rawReq.push(null);
 
