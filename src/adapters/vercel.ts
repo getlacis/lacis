@@ -2,7 +2,7 @@ import type { Adapter, ServerlessConfig, VercelRequest, VercelResponse, Request,
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
 import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
-import { applyRequestMethods, applyResponseMethods, handleAdapterError } from "@/utils/adapter-base";
+import { applyRequestMethods, applyResponseMethods, extractPathname, handleAdapterError } from "@/utils/adapter-base";
 
 export const vercelAdapter: Adapter = {
   name: "vercel",
@@ -42,7 +42,7 @@ export const vercelAdapter: Adapter = {
           if (shouldContinue === false || res.headersSent) return;
         }
 
-        const route = findRoute(req.url ?? "/", req.method ?? "GET");
+        const route = findRoute(extractPathname(req.url ?? "/"), req.method ?? "GET");
 
         if (!route) {
           res.status(404).json({ error: "Route not found" });

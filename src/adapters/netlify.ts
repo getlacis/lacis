@@ -96,18 +96,7 @@ export const netlifyAdapter: Adapter = {
       const req = rawReq as unknown as Request;
       const res = rawRes as unknown as Response;
 
-      const route = findRoute(event.path, event.httpMethod);
-
-      if (!route) {
-        return { statusCode: 404, body: JSON.stringify({ error: "Route not found" }) };
-      }
-
-      if (isRouteError(route)) {
-        return {
-          statusCode: route.status ?? 500,
-          body: JSON.stringify({ error: route.error }),
-        };
-      }
+      (req as any).query = event.queryStringParameters ?? {};
 
       try {
         if (hasMiddlewares()) {
@@ -115,6 +104,19 @@ export const netlifyAdapter: Adapter = {
           if (shouldContinue === false || headersSent) {
             return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
           }
+        }
+
+        const route = findRoute(event.path, event.httpMethod);
+
+        if (!route) {
+          return { statusCode: 404, body: JSON.stringify({ error: "Route not found" }) };
+        }
+
+        if (isRouteError(route)) {
+          return {
+            statusCode: route.status ?? 500,
+            body: JSON.stringify({ error: route.error }),
+          };
         }
 
         req.params = route.params;

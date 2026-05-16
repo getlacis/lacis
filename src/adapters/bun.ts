@@ -8,6 +8,7 @@ import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig, SSEOptions } from "@/types";
 import {
   handleAdapterError,
+  parseQueryString,
   withRequestMethods,
   withResponseMethods,
   type LacisHeaders,
@@ -231,6 +232,7 @@ export const bunAdapter: Adapter = {
           const pathname = url.pathname;
 
           const req = new BunRequest(request, pathname, url.search, server?.requestIP(request)?.address ?? "");
+          (req as any).query = parseQueryString(url.search);
           const res = new BunResponse();
 
           try {

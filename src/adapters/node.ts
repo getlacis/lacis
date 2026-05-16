@@ -7,8 +7,10 @@ import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import {
+  extractPathname,
   handleAdapterError,
   nodeBody,
+  parseQueryString,
   withRequestMethods,
   withResponseMethods,
 } from "@/utils/adapter-base";
@@ -121,8 +123,8 @@ export const nodeAdapter: Adapter = {
             }
 
             const rawUrl = req.url || "/";
-            const qIdx = rawUrl.indexOf("?");
-            const pathname = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
+            const pathname = extractPathname(rawUrl);
+            (req as any).query = parseQueryString(rawUrl);
 
             if (hasMiddlewares()) {
               const ok = await runMiddlewares(

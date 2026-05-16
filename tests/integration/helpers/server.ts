@@ -4,7 +4,7 @@ import supertest from 'supertest';
 import { findRoute, registerRoutes, resetRouter } from '@/core/router';
 import { hasMiddlewares, registerMiddlewareConfig, resetMiddlewares, runMiddlewares } from '@/core/middleware';
 import { registerCorsConfig } from '@/core/cors';
-import { handleAdapterError, nodeBody, withRequestMethods, withResponseMethods } from '@/utils/adapter-base';
+import { extractPathname, handleAdapterError, nodeBody, parseQueryString, withRequestMethods, withResponseMethods } from '@/utils/adapter-base';
 import type { CorsConfig, ServerlessRoute } from '@/types';
 import type { MiddlewareCallback } from '@/types/middleware';
 
@@ -38,7 +38,8 @@ export function createTestApp(options: TestServerOptions = {}) {
     async (req, res) => {
       try {
         const rawUrl = req.url ?? '/';
-        const pathname = rawUrl.includes('?') ? rawUrl.slice(0, rawUrl.indexOf('?')) : rawUrl;
+        const pathname = extractPathname(rawUrl);
+        (req as any).query = parseQueryString(rawUrl);
 
         if (hasMiddlewares()) {
           const ok = await runMiddlewares('beforeRequest', req as any, res as any);

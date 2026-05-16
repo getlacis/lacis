@@ -340,6 +340,17 @@ export function applyRequestMethods(req: any): void {
   req.cookies = new RequestCookiesImpl(parseCookieHeader(req.headers));
 }
 
+export function extractPathname(url: string): string {
+  const idx = url.indexOf("?");
+  return idx === -1 ? url : url.slice(0, idx);
+}
+
+export function parseQueryString(url: string): Record<string, string> {
+  const idx = url.indexOf("?");
+  if (idx === -1) return {};
+  return Object.fromEntries(new URLSearchParams(url.slice(idx + 1)).entries());
+}
+
 export async function handleAdapterError(req: Request, res: Response, error: unknown): Promise<void> {
   console.error("[lacis] Unhandled error:", error);
   if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
