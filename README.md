@@ -190,7 +190,8 @@ The spec is built from all `defineHandler` routes. Routes without `defineHandler
 
 | Library | Package to install |
 |---|---|
-| Zod | `zod-to-json-schema` |
+| Zod 4.4+ | none (native) |
+| Zod < 4.4 | `zod-to-json-schema` |
 | Valibot | `@valibot/to-json-schema` |
 | ArkType | none (native `.toJsonSchema()`) |
 
