@@ -26,14 +26,12 @@ class _BunRequestBase {
   connection: { remoteAddress: string };
   private _req: Request;
 
-  constructor(req: Request, pathname: string, search: string) {
+  constructor(req: Request, pathname: string, search: string, remoteAddress: string) {
     this._req = req;
     this.url = pathname + search;
     this.method = req.method;
     this.headers = req.headers as unknown as LacisHeaders;
-    this.connection = {
-      remoteAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
-    };
+    this.connection = { remoteAddress };
   }
 
   setTimeout(_: number) {}
@@ -227,11 +225,11 @@ export const bunAdapter: Adapter = {
       const server = Bun.serve({
         port,
         reusePort: isWorker,
-        async fetch(request) {
+        async fetch(request, server) {
           const url = new URL(request.url);
           const pathname = url.pathname;
 
-          const req = new BunRequest(request, pathname, url.search);
+          const req = new BunRequest(request, pathname, url.search, server.requestIP(request)?.address ?? "");
           const res = new BunResponse();
 
           try {
