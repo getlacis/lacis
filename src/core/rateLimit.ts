@@ -30,6 +30,14 @@ function createRateLimit(options: RateLimitOptions = {}): MiddlewareCallback {
 
   const store = new Map<string, RateLimitEntry>();
 
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+      if (now >= entry.resetAt) store.delete(key);
+    }
+  }, windowMs);
+  sweep.unref();
+
   return (req, res) => {
     const key = keyGenerator(req);
     const now = Date.now();

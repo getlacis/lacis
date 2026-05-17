@@ -104,23 +104,32 @@ class Router {
     const cacheKey = method + ":" + normalizedUrl;
 
     const cached = this.cachedRoutes.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      // LRU: promote to end so eviction removes least recently used
+      this.cachedRoutes.delete(cacheKey);
+      this.cachedRoutes.set(cacheKey, cached);
+      return cached;
+    }
 
     const segments = normalizedUrl === "/" ? [] : normalizedUrl.split("/").filter(Boolean);
     // Reusable scratch object — traverse mutates and restores it, copies on return
     const params: Record<string, string> = Object.create(null);
 
-    const result = this.traverse(this.rootNode, segments, method, params, 0)
+    const result: RouteMatchResult = this.traverse(this.rootNode, segments, method, params, 0)
       ?? { handler: null, params: Object.create(null) };
 
-    if (this.cachedRoutes.size >= CACHE_MAX) {
-      let evicted = 0;
-      for (const key of this.cachedRoutes.keys()) {
-        this.cachedRoutes.delete(key);
-        if (++evicted >= CACHE_EVICT) break;
+    // Only cache successful matches and 405s — skip true 404s to avoid cache pollution
+    if (result.handler !== null || result.allowedMethods?.length) {
+      if (this.cachedRoutes.size >= CACHE_MAX) {
+        let evicted = 0;
+        for (const key of this.cachedRoutes.keys()) {
+          this.cachedRoutes.delete(key);
+          if (++evicted >= CACHE_EVICT) break;
+        }
       }
+      this.cachedRoutes.set(cacheKey, result);
     }
-    this.cachedRoutes.set(cacheKey, result);
+
     return result;
   }
 
@@ -137,11 +146,11 @@ class Router {
           node.handlers[method] ??
           (method === "HEAD" ? node.handlers["GET"] : undefined) ??
           node.handlers[""];
-        if (handler) return { handler, params: { ...params } };
+        if (handler) return { handler, params: Object.assign(Object.create(null), params) };
 
         // Path exists but method not registered — collect allowed methods in one pass
         const allowed = Object.keys(node.handlers).filter((m) => m !== "");
-        return { handler: null, params: {}, allowedMethods: allowed };
+        return { handler: null, params: Object.create(null), allowedMethods: allowed };
       }
 
       // Optional param child at end of URL
@@ -151,7 +160,7 @@ class Router {
           oc.node.handlers[method] ??
           (method === "HEAD" ? oc.node.handlers["GET"] : undefined) ??
           oc.node.handlers[""];
-        if (handler) return { handler, params: { ...params } };
+        if (handler) return { handler, params: Object.assign(Object.create(null), params) };
       }
 
       return null;
@@ -179,9 +188,9 @@ class Router {
     if (node.wildcardHandler) {
       const handler = node.wildcardHandler[method] ?? node.wildcardHandler[""];
       const rest = segments.slice(index).join("/");
-      if (handler) return { handler, params: { ...params, "*": rest } };
+      if (handler) return { handler, params: Object.assign(Object.create(null), params, { "*": rest }) };
       const allowed = Object.keys(node.wildcardHandler).filter((m) => m !== "");
-      if (allowed.length > 0) return { handler: null, params: { ...params, "*": rest }, allowedMethods: allowed };
+      if (allowed.length > 0) return { handler: null, params: Object.assign(Object.create(null), params, { "*": rest }), allowedMethods: allowed };
     }
 
     return null;
