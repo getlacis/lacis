@@ -1,4 +1,6 @@
 import type { Request, Response } from "@/types"
+import { createStore, interceptResponse, replayEntry, defaultCacheKey } from "./responseCache"
+import type { Store } from "./responseCache"
 
 // Inlined to avoid an external dependency on @standard-schema/spec
 interface StandardSchema<Input = unknown, Output = Input> {
@@ -45,6 +47,12 @@ export interface HandlerMeta {
   deprecated?: boolean
 }
 
+export interface HandlerCacheOptions {
+  ttl: number
+  maxSize?: number
+  key?: (req: Request) => string
+}
+
 export interface DefineHandlerConfig<
   TParams extends StandardSchema | undefined = undefined,
   TQuery extends StandardSchema | undefined = undefined,
@@ -54,6 +62,7 @@ export interface DefineHandlerConfig<
   query?: TQuery
   body?: TBody
   meta?: HandlerMeta
+  cache?: HandlerCacheOptions
   handler: (
     req: ValidatedRequest<TParams, TQuery, TBody>,
     res: Response
@@ -85,7 +94,22 @@ export function defineHandler<
   TQuery extends StandardSchema | undefined = undefined,
   TBody extends StandardSchema | undefined = undefined,
 >(config: DefineHandlerConfig<TParams, TQuery, TBody>): DefinedHandler {
+  const store: Store | null = config.cache ? createStore(config.cache.maxSize ?? 500) : null
+
   const wrapped = async (req: Request, res: Response): Promise<void> => {
+    if (store && config.cache) {
+      const key = config.cache.key ? config.cache.key(req) : defaultCacheKey(req)
+      const cached = store.get(key)
+      if (cached) {
+        replayEntry(res, cached)
+        return
+      }
+      interceptResponse(res, (partial) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          store.set(key, { ...partial, expiresAt: Date.now() + config.cache!.ttl * 1000 })
+        }
+      })
+    }
     if (config.params) {
       const result = await runValidation(config.params, req.params ?? {})
       if (!result.success) {
@@ -122,6 +146,7 @@ export function defineHandler<
 
     await config.handler(req as ValidatedRequest<TParams, TQuery, TBody>, res)
   }
+
 
   // Attached for future OpenAPI generation via CLI
   ;(wrapped as any)._defineHandler = config
