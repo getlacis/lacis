@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { generateManifest } from './build.js'
+import { build } from './build.js'
 import { watchRoutes } from './watch.js'
 import { dev } from './dev.js'
 
@@ -8,14 +8,15 @@ function parseArgs(argv: string[]) {
   const command = args[0] ?? ''
 
   const routesFlagIndex = args.indexOf('--routes')
-  const routesDirArg =
-    routesFlagIndex !== -1 ? args[routesFlagIndex + 1] : undefined
-
+  const routesDirArg = routesFlagIndex !== -1 ? args[routesFlagIndex + 1] : undefined
   const routesDir = routesDirArg
     ? resolve(process.cwd(), routesDirArg)
     : resolve(process.cwd(), 'routes')
 
-  return { command, routesDir }
+  const entryFlagIndex = args.indexOf('--entry')
+  const entry = entryFlagIndex !== -1 ? args[entryFlagIndex + 1] : undefined
+
+  return { command, routesDir, entry }
 }
 
 function printHelp() {
@@ -23,7 +24,7 @@ function printHelp() {
 Usage: lacis <command> [options]
 
 Commands:
-  build             Generate routes/_manifest.ts
+  build             Compile project to dist/ (Node: tsc/tsup, Bun: bun build)
   watch             Watch routes and regenerate manifest on changes
   dev               Auto-detect platform and start dev server
 
@@ -31,15 +32,16 @@ To scaffold a new project: npm create lacis@latest
 
 Options:
   --routes <dir>    Path to routes directory (default: ./routes)
+  --entry <file>    Entry point for bundlers (default: auto-detected from package.json)
 `)
 }
 
 async function main() {
-  const { command, routesDir } = parseArgs(process.argv)
+  const { command, routesDir, entry } = parseArgs(process.argv)
 
   switch (command) {
     case 'build':
-      await generateManifest(routesDir)
+      await build(routesDir, entry)
       break
     case 'watch':
       await watchRoutes(routesDir)

@@ -1,5 +1,7 @@
-import { readdir, writeFile } from 'fs/promises'
+import { readdir, writeFile, unlink } from 'fs/promises'
 import { join, relative } from 'path'
+import { spawn } from 'child_process'
+import { existsSync, readFileSync } from 'fs'
 
 interface DiscoveredRoute {
   importPath: string
@@ -63,4 +65,134 @@ export async function generateManifest(routesDir: string): Promise<void> {
 
   await writeFile(join(routesDir, '_manifest.ts'), content, 'utf-8')
   console.log(`[lacis] Generated manifest with ${routes.length} route(s)`)
+}
+
+type BuildPlatform = 'bun' | 'node' | 'vercel' | 'netlify'
+
+function detectPlatform(cwd: string): BuildPlatform {
+  if (existsSync(join(cwd, 'netlify.toml'))) return 'netlify'
+  if (existsSync(join(cwd, 'vercel.json'))) return 'vercel'
+
+  try {
+    const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+    if (allDeps['@netlify/functions'] || allDeps['netlify-cli']) return 'netlify'
+    if (allDeps['vercel'] || allDeps['@vercel/node']) return 'vercel'
+  } catch {}
+
+  if ((process.versions as Record<string, string | undefined>).bun !== undefined) return 'bun'
+  if (existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))) return 'bun'
+
+  return 'node'
+}
+
+function findEntry(cwd: string): string | null {
+  try {
+    const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')) as {
+      module?: unknown
+      main?: unknown
+    }
+    const candidate = pkg.module ?? pkg.main
+    if (typeof candidate === 'string' && existsSync(join(cwd, candidate))) return candidate
+  } catch {}
+
+  for (const name of ['server.ts', 'index.ts', 'app.ts', 'main.ts']) {
+    if (existsSync(join(cwd, name))) return name
+  }
+
+  return null
+}
+
+function getTsConfigOutDir(cwd: string): string | null {
+  try {
+    const tsconfig = JSON.parse(readFileSync(join(cwd, 'tsconfig.json'), 'utf-8')) as {
+      compilerOptions?: { outDir?: string }
+    }
+    return tsconfig.compilerOptions?.outDir ?? null
+  } catch {
+    return null
+  }
+}
+
+async function findTsFiles(dir: string): Promise<string[]> {
+  const files: string[] = []
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return files
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      files.push(...await findTsFiles(join(dir, entry.name)))
+    } else if (entry.name.endsWith('.ts') && entry.name !== '_manifest.ts') {
+      files.push(join(dir, entry.name))
+    }
+  }
+  return files
+}
+
+function spawnAsync(cmd: string, args: string[], cwd: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: 'inherit', cwd })
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`${cmd} exited with code ${code}`))
+    })
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') reject(new Error(`Command not found: ${cmd}. Make sure it is installed.`))
+      else reject(err)
+    })
+  })
+}
+
+export async function build(routesDir: string, entry?: string): Promise<void> {
+  const cwd = process.cwd()
+  const platform = detectPlatform(cwd)
+  const manifestPath = join(routesDir, '_manifest.ts')
+  // Path relative to cwd for passing to build tools
+  const manifestRelPath = relative(cwd, manifestPath).replace(/\\/g, '/')
+
+  await generateManifest(routesDir)
+
+  // Vercel/Netlify manage their own compilation pipeline; the manifest is all they need.
+  if (platform === 'vercel' || platform === 'netlify') {
+    console.log(`[lacis] ${platform} detected — manifest generated, platform handles compilation`)
+    return
+  }
+
+  try {
+    if (platform === 'bun') {
+      const resolvedEntry = entry ?? findEntry(cwd)
+      if (!resolvedEntry) throw new Error('Entry point not found. Specify one with --entry <file>.')
+
+      const routeFiles = await findTsFiles(routesDir)
+      const allFiles = [join(cwd, resolvedEntry), manifestPath, ...routeFiles]
+
+      // Use Bun.build() JS API — external:'*' gives transpile-only behavior,
+      // root preserves directory structure in outdir. Avoids CLI --outdir bug.
+      const result = await (globalThis as any).Bun.build({
+        entrypoints: allFiles,
+        outdir: join(cwd, 'dist'),
+        root: cwd,
+        external: ['*'],
+        target: 'bun',
+      })
+      if (!result.success) {
+        const msgs: string = result.logs.map((l: any) => l.message ?? String(l)).join('\n')
+        throw new Error(`Bun build failed:\n${msgs}`)
+      }
+    } else {
+      const outDir = getTsConfigOutDir(cwd) ?? 'dist'
+      await spawnAsync('npx', ['tsc', '--outDir', outDir], cwd)
+    }
+  } finally {
+    // Manifest is a build artifact — remove it from source after compilation
+    await unlink(manifestPath).catch(() => {})
+  }
+
+  console.log('[lacis] Build complete → dist/')
 }

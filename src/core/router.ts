@@ -1,5 +1,7 @@
 import fs from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
+import { join } from "path";
 import type { ServerlessRoute } from "@/types";
 import { loadMiddlewares } from "./middleware";
 import { primaryLog } from "@/utils/logs";
@@ -322,7 +324,15 @@ export function registerRoutes(routes: ServerlessRoute[]): void {
 }
 
 export async function loadRoutes(routesDir: string) {
-  return router.loadRoutes(routesDir);
+  const manifestPath = join(routesDir, '_manifest.js')
+  if (existsSync(manifestPath)) {
+    router.reset()
+    await loadMiddlewares(routesDir)
+    const mod = (await import(manifestPath)) as { routes: ServerlessRoute[] }
+    registerRoutes(mod.routes)
+    return
+  }
+  return router.loadRoutes(routesDir)
 }
 
 export function findRoute(url: string, method: string = "GET"): FindRouteResult {
@@ -339,7 +349,10 @@ export function findRoute(url: string, method: string = "GET"): FindRouteResult 
 }
 
 export function getRoutesDir(customDir?: string) {
-  return path.resolve(process.cwd(), customDir || process.env.ROUTES_DIR || "routes");
+  const defaultDir =
+    process.env.ROUTES_DIR ??
+    (process.env.NODE_ENV === 'production' ? 'dist/routes' : 'routes')
+  return path.resolve(process.cwd(), customDir ?? defaultDir)
 }
 
 export function getRouterStats() {
