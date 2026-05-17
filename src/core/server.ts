@@ -38,13 +38,13 @@ async function createServer(
     }
 
     if (verbose) {
-      primaryLog("🚀 Serveur démarré");
-      primaryLog(`📂 Routes chargées depuis: ${routesDir}`);
+      primaryLog("🚀 Server started");
+      primaryLog(`📂 Routes loaded from: ${routesDir}`);
     }
     
     if (config.isDev) {
       if (verbose) {
-        primaryLog("🔥 Mode de développement activé");
+        primaryLog("🔥 Development mode enabled");
       }
     }
 
@@ -65,7 +65,7 @@ async function createServer(
         server = handler;
         break;
       default:
-        throw new Error(`Plateforme "${platform}" non supportée`);
+        throw new Error(`Unsupported platform: "${platform}"`);
     }
 
     if (openapiDoc && openapiPath) {
@@ -78,7 +78,7 @@ async function createServer(
     return server;
   } catch (error) {
     if (verbose) {
-      primaryLog("❌ Erreur lors de la création du serveur:", error);
+      primaryLog("❌ Failed to create server:", error);
     }
     throw error;
   }
@@ -93,14 +93,14 @@ function setupGracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     
-    primaryLog(`\nSignal ${signal} reçu, arrêt en cours...`);
+    primaryLog(`\n${signal} received, shutting down...`);
         
     if (serverInstance && typeof serverInstance.close === 'function') {
       await new Promise<void>((resolve) => {
         serverInstance!.close(() => resolve());
         
         setTimeout(() => {
-          primaryLog('Fermeture forcée après délai');
+          primaryLog('Forced shutdown after timeout');
           resolve();
         }, 3000);
       });

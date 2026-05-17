@@ -47,7 +47,6 @@ export function createSSEClient(
   const disableReconnect = options.disableReconnect || false;
   const requestBody = options.body;
   const contentType = options.contentType || (requestBody ? 'application/json' : undefined);
-  // Si la méthode n'est pas spécifiée, utiliser POST si un corps est fourni, sinon GET
   const method = options.method || (requestBody ? "POST" : "GET");
 
   // If first argument is a request object, treat it as an existing SSE connection
@@ -185,16 +184,12 @@ export function createSSEClient(
       // Configure HTTP/HTTPS request options
       const parsedUrl = new URL(urlOrReq as string);
       
-      // Ajouter les paramètres de requête s'ils sont fournis
       if (options.params) {
-        // Si params est un objet
         if (typeof options.params === 'object') {
           Object.entries(options.params).forEach(([key, value]) => {
             parsedUrl.searchParams.append(key, String(value));
           });
-        } 
-        // Si params est une chaîne
-        else if (typeof options.params === 'string') {
+        } else if (typeof options.params === 'string') {
           const searchParams = new URLSearchParams(options.params);
           searchParams.forEach((value, key) => {
             parsedUrl.searchParams.append(key, value);
@@ -206,7 +201,7 @@ export function createSSEClient(
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
-        method: method, // Utiliser la méthode définie plus haut
+        method: method,
         headers: {
           Accept: "text/event-stream",
           ...(req?.headers || {}),
@@ -267,7 +262,6 @@ export function createSSEClient(
         reject(error);
       });
 
-      // Envoyer le corps de la requête si présent
       if (requestBody) {
         if (typeof requestBody === "string") {
           request.write(requestBody);
