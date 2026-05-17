@@ -283,6 +283,19 @@ export function withResponseMethods<T extends ResponseMixinBase>(Base: T) {
       return this;
     }
 
+    html(data: string) {
+      this.setHeader("Content-Type", "text/html; charset=utf-8");
+      this.end(data);
+      return this;
+    }
+
+    redirect(url: string, status = 302) {
+      this.statusCode = status;
+      this.setHeader("Location", url);
+      this.end();
+      return this;
+    }
+
     initSSE(options?: SSEOptions) {
       return initSSE(this as any, options);
     }
@@ -361,6 +374,8 @@ export function applyResponseMethods(res: any): void {
   res.status = p.status;
   res.send = p.send;
   res.json = p.json;
+  res.html = p.html;
+  res.redirect = p.redirect;
   res.initSSE = p.initSSE;
   res.sseSend = p.sseSend;
   res.sseJson = p.sseJson;

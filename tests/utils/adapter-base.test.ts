@@ -198,4 +198,35 @@ describe('withResponseMethods', () => {
       expect(res.getHeader('Content-Type')).toBe('application/json');
     });
   });
+
+  describe('html()', () => {
+    it('sets Content-Type to text/html; charset=utf-8', () => {
+      const res = makeRes();
+      res.html('<h1>hello</h1>');
+      expect(res.getHeader('Content-Type')).toBe('text/html; charset=utf-8');
+    });
+
+    it('works when chained after status()', () => {
+      const res = makeRes();
+      res.status(201).html('<p>created</p>');
+      expect(res.statusCode).toBe(201);
+      expect(res.getHeader('Content-Type')).toBe('text/html; charset=utf-8');
+    });
+  });
+
+  describe('redirect()', () => {
+    it('defaults to 302 and sets Location header', () => {
+      const res = makeRes();
+      res.redirect('/login');
+      expect(res.statusCode).toBe(302);
+      expect(res.getHeader('Location')).toBe('/login');
+    });
+
+    it('accepts a custom status code', () => {
+      const res = makeRes();
+      res.redirect('/new-path', 301);
+      expect(res.statusCode).toBe(301);
+      expect(res.getHeader('Location')).toBe('/new-path');
+    });
+  });
 });

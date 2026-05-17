@@ -53,6 +53,8 @@ interface Response extends ServerResponse {
   cookies: ResponseCookies;
 
   json(data: any): void;
+  html(data: string): void;
+  redirect(url: string, status?: number): void;
   send(data: any): void;
   status(code: number): Response;
   initSSE(options?: SSEOptions): void;
