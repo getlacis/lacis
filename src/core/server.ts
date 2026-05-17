@@ -38,14 +38,7 @@ async function createServer(
     }
 
     if (verbose) {
-      primaryLog("🚀 Server started");
       primaryLog(`📂 Routes loaded from: ${routesDir}`);
-    }
-    
-    if (config.isDev) {
-      if (verbose) {
-        primaryLog("🔥 Development mode enabled");
-      }
     }
 
     const adapter = getAdapter(platform);
