@@ -6,7 +6,7 @@ const defaultConfig: ServerConfig = {
   isDev: process.env.NODE_ENV === "development",
   timeout: 30000,
   cluster: {
-    enabled: true,
+    enabled: false,
     workers: undefined
   },
   platform: "node",
