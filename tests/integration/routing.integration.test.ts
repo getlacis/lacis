@@ -5,34 +5,39 @@ const handler200 = async (_req: Request, res: Response) => { res.status(200).jso
 
 describe('routing — static routes', () => {
   it('responds 200 on a registered GET route', async () => {
-    const app = createTestApp({ routes: [{ path: '/hello', handlers: { GET: handler200 } }] });
-    await app.get('/hello').expect(200).expect({ ok: true });
+    const { request, close } = await createTestApp({ routes: [{ path: '/hello', handlers: { GET: handler200 } }] });
+    await request.get('/hello').expect(200).expect({ ok: true });
+    await close();
   });
 
   it('responds 404 for an unregistered path', async () => {
-    const app = createTestApp({ routes: [] });
-    await app.get('/nope').expect(404);
+    const { request, close } = await createTestApp({ routes: [] });
+    await request.get('/nope').expect(404);
+    await close();
   });
 
   it('responds 405 when method is not registered', async () => {
-    const app = createTestApp({ routes: [{ path: '/users', handlers: { GET: handler200 } }] });
-    await app.post('/users').expect(405);
+    const { request, close } = await createTestApp({ routes: [{ path: '/users', handlers: { GET: handler200 } }] });
+    await request.post('/users').expect(405);
+    await close();
   });
 
   it('trailing slash is normalised', async () => {
-    const app = createTestApp({ routes: [{ path: '/about', handlers: { GET: handler200 } }] });
-    await app.get('/about/').expect(200);
+    const { request, close } = await createTestApp({ routes: [{ path: '/about', handlers: { GET: handler200 } }] });
+    await request.get('/about/').expect(200);
+    await close();
   });
 
   it('HEAD falls back to GET handler', async () => {
-    const app = createTestApp({ routes: [{ path: '/ping', handlers: { GET: handler200 } }] });
-    await app.head('/ping').expect(200);
+    const { request, close } = await createTestApp({ routes: [{ path: '/ping', handlers: { GET: handler200 } }] });
+    await request.head('/ping').expect(200);
+    await close();
   });
 });
 
 describe('routing — dynamic params', () => {
   it('extracts a single :param and exposes it on req.params', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/users/:id',
         handlers: {
@@ -42,11 +47,12 @@ describe('routing — dynamic params', () => {
         },
       }],
     });
-    await app.get('/users/42').expect(200).expect({ id: '42' });
+    await request.get('/users/42').expect(200).expect({ id: '42' });
+    await close();
   });
 
   it('extracts multiple params', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/orgs/:org/repos/:repo',
         handlers: {
@@ -56,24 +62,26 @@ describe('routing — dynamic params', () => {
         },
       }],
     });
-    await app.get('/orgs/acme/repos/lacis').expect(200).expect({ org: 'acme', repo: 'lacis' });
+    await request.get('/orgs/acme/repos/lacis').expect(200).expect({ org: 'acme', repo: 'lacis' });
+    await close();
   });
 
   it('static segment takes priority over param when both match', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [
         { path: '/items/featured', handlers: { GET: async (_req: Request, res: Response) => { res.status(200).json({ type: 'static' }); } } },
         { path: '/items/:id',      handlers: { GET: async (_req: Request, res: Response) => { res.status(200).json({ type: 'param' }); } } },
       ],
     });
-    await app.get('/items/featured').expect(200).expect({ type: 'static' });
-    await app.get('/items/123').expect(200).expect({ type: 'param' });
+    await request.get('/items/featured').expect(200).expect({ type: 'static' });
+    await request.get('/items/123').expect(200).expect({ type: 'param' });
+    await close();
   });
 });
 
 describe('routing — request body', () => {
   it('reads a JSON body via req.json()', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/echo',
         handlers: {
@@ -84,17 +92,18 @@ describe('routing — request body', () => {
         },
       }],
     });
-    await app.post('/echo')
+    await request.post('/echo')
       .set('Content-Type', 'application/json')
       .send({ name: 'lacis' })
       .expect(200)
       .expect({ name: 'lacis' });
+    await close();
   });
 });
 
 describe('routing — param name consistency', () => {
   it('GET and POST on the same path share the param name correctly', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [
         {
           path: '/users/:id',
@@ -105,25 +114,26 @@ describe('routing — param name consistency', () => {
         },
       ],
     });
-    await app.get('/users/42').expect(200).expect({ method: 'GET', id: '42' });
-    await app.post('/users/99').expect(200).expect({ method: 'POST', id: '99' });
+    await request.get('/users/42').expect(200).expect({ method: 'GET', id: '42' });
+    await request.post('/users/99').expect(200).expect({ method: 'POST', id: '99' });
+    await close();
   });
 
-  it('throws at registration when two methods use different param names at the same position', () => {
-    expect(() =>
+  it('throws at registration when two methods use different param names at the same position', async () => {
+    await expect(
       createTestApp({
         routes: [
           { path: '/users/:id',     handlers: { GET:  async (_req: Request, res: Response) => res.json({}) } },
           { path: '/users/:userId', handlers: { POST: async (_req: Request, res: Response) => res.json({}) } },
         ],
       }),
-    ).toThrow(/param name.*userId.*conflicts.*id/);
+    ).rejects.toThrow(/param name.*userId.*conflicts.*id/);
   });
 });
 
 describe('routing — query string', () => {
   it('preserves query string in req.url', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/search',
         handlers: {
@@ -133,8 +143,9 @@ describe('routing — query string', () => {
         },
       }],
     });
-    const { body } = await app.get('/search?q=hello&page=2').expect(200);
+    const { body } = await request.get('/search?q=hello&page=2').expect(200);
     expect(body.url).toContain('q=hello');
     expect(body.url).toContain('page=2');
+    await close();
   });
 });

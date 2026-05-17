@@ -3,7 +3,7 @@ import type { Request, Response } from '@/types';
 
 describe('cookies — Set-Cookie response', () => {
   it('sends a Set-Cookie header', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/login',
         handlers: {
@@ -14,13 +14,14 @@ describe('cookies — Set-Cookie response', () => {
         },
       }],
     });
-    const response = await app.post('/login').expect(200);
+    const response = await request.post('/login').expect(200);
     expect(response.headers['set-cookie']).toBeDefined();
     expect(response.headers['set-cookie'][0]).toContain('session=abc123');
+    await close();
   });
 
   it('sets Path=/ by default', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/set',
         handlers: {
@@ -31,12 +32,13 @@ describe('cookies — Set-Cookie response', () => {
         },
       }],
     });
-    const response = await app.get('/set');
+    const response = await request.get('/set');
     expect(response.headers['set-cookie'][0]).toContain('Path=/');
+    await close();
   });
 
   it('includes HttpOnly, Secure, SameSite attributes', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/secure',
         handlers: {
@@ -47,15 +49,16 @@ describe('cookies — Set-Cookie response', () => {
         },
       }],
     });
-    const response = await app.get('/secure');
+    const response = await request.get('/secure');
     const cookie = response.headers['set-cookie'][0];
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('Secure');
     expect(cookie).toContain('SameSite=Strict');
+    await close();
   });
 
   it('sends multiple Set-Cookie headers for multiple cookies', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/multi',
         handlers: {
@@ -66,12 +69,13 @@ describe('cookies — Set-Cookie response', () => {
         },
       }],
     });
-    const response = await app.get('/multi');
+    const response = await request.get('/multi');
     expect(response.headers['set-cookie']).toHaveLength(2);
+    await close();
   });
 
   it('deletes a cookie by setting Max-Age=0', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/logout',
         handlers: {
@@ -82,16 +86,17 @@ describe('cookies — Set-Cookie response', () => {
         },
       }],
     });
-    const response = await app.post('/logout');
+    const response = await request.post('/logout');
     const cookie = response.headers['set-cookie'][0];
     expect(cookie).toContain('Max-Age=0');
     expect(cookie).toContain('Expires=Thu, 01 Jan 1970');
+    await close();
   });
 });
 
 describe('cookies — reading request cookies', () => {
   it('reads a cookie sent by the client', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/me',
         handlers: {
@@ -102,14 +107,15 @@ describe('cookies — reading request cookies', () => {
         },
       }],
     });
-    await app.get('/me')
+    await request.get('/me')
       .set('Cookie', 'session=abc123')
       .expect(200)
       .expect({ session: 'abc123' });
+    await close();
   });
 
   it('returns undefined for a missing cookie', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/me',
         handlers: {
@@ -120,11 +126,12 @@ describe('cookies — reading request cookies', () => {
         },
       }],
     });
-    await app.get('/me').expect(200).expect({ token: null });
+    await request.get('/me').expect(200).expect({ token: null });
+    await close();
   });
 
   it('reads multiple cookies', async () => {
-    const app = createTestApp({
+    const { request, close } = await createTestApp({
       routes: [{
         path: '/ctx',
         handlers: {
@@ -134,9 +141,10 @@ describe('cookies — reading request cookies', () => {
         },
       }],
     });
-    await app.get('/ctx')
+    await request.get('/ctx')
       .set('Cookie', 'a=1; b=2; c=3')
       .expect(200)
       .expect({ a: '1', b: '2', c: '3' });
+    await close();
   });
 });

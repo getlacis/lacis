@@ -1,19 +1,8 @@
-import http from 'http';
-import { IncomingMessage } from 'http';
-import supertest from 'supertest';
-import { findRoute, registerRoutes, resetRouter } from '@/core/router';
-import { hasMiddlewares, registerMiddlewareConfig, resetMiddlewares, runMiddlewares } from '@/core/middleware';
-import { registerCorsConfig } from '@/core/cors';
-import { extractPathname, handleAdapterError, nodeBody, parseQueryString, withRequestMethods, withResponseMethods } from '@/utils/adapter-base';
-import type { CorsConfig, ServerlessRoute } from '@/types';
+import supertest, { type Agent } from 'supertest';
+import { createServer } from '@/core/server';
+import type { CorsConfig, ServerConfig, ServerlessRoute } from '@/types';
 import type { MiddlewareCallback } from '@/types/middleware';
-
-class _ReqBase extends IncomingMessage {
-  params: Record<string, string> = {};
-  body = nodeBody;
-}
-class TestRequest extends withRequestMethods(_ReqBase) {}
-class TestResponse extends withResponseMethods(http.ServerResponse<TestRequest>) {}
+import type { Server } from 'http';
 
 export interface TestServerOptions {
   routes?: ServerlessRoute[];
@@ -23,52 +12,31 @@ export interface TestServerOptions {
     afterRequest?: MiddlewareCallback | MiddlewareCallback[];
     onError?: MiddlewareCallback | MiddlewareCallback[];
   };
+  openapi?: ServerConfig['openapi'];
 }
 
-export function createTestApp(options: TestServerOptions = {}) {
-  resetRouter();
-  resetMiddlewares();
+export interface TestApp {
+  request: Agent;
+  close: () => Promise<void>;
+}
 
-  if (options.routes) registerRoutes(options.routes);
-  if (options.cors) registerCorsConfig(options.cors);
-  if (options.middleware) registerMiddlewareConfig(options.middleware);
+export async function createTestApp(options: TestServerOptions = {}): Promise<TestApp> {
+  const server = await createServer('', {
+    platform: 'node',
+    port: 0,
+    cluster: { enabled: false },
+    routes: options.routes ?? [],
+    cors: options.cors,
+    middleware: options.middleware,
+    openapi: options.openapi,
+  }) as Server;
 
-  const server = http.createServer<typeof TestRequest, typeof TestResponse>(
-    { IncomingMessage: TestRequest, ServerResponse: TestResponse },
-    async (req, res) => {
-      try {
-        const rawUrl = req.url ?? '/';
-        const pathname = extractPathname(rawUrl);
-        (req as any).query = parseQueryString(rawUrl);
+  const { port } = server.address() as { port: number };
 
-        if (hasMiddlewares()) {
-          const ok = await runMiddlewares('beforeRequest', req as any, res as any);
-          if (ok === false || res.headersSent) return;
-        }
-
-        const route = findRoute(pathname, req.method ?? 'GET');
-
-        if (!route) {
-          res.status(404).json({ error: 'Route not found' });
-          return;
-        }
-
-        if ('error' in route) {
-          res.status((route as any).status ?? 500).json({ error: (route as any).error });
-          return;
-        }
-
-        req.params = route.params;
-        await route.handler(req as any, res as any);
-
-        if (hasMiddlewares()) await runMiddlewares('afterRequest', req as any, res as any);
-        if (!res.headersSent) res.end();
-      } catch (error) {
-        await handleAdapterError(req as any, res as any, error);
-        if (!res.headersSent) res.status(500).json({ error: 'Internal Server Error' });
-      }
-    },
-  );
-
-  return supertest(server);
+  return {
+    request: supertest.agent(`http://localhost:${port}`),
+    close: () => new Promise<void>((resolve, reject) =>
+      server.close(err => err ? reject(err) : resolve())
+    ),
+  };
 }
