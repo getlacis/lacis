@@ -5,12 +5,14 @@ import { resetMiddlewares, runShutdownHook } from './middleware';
 import { buildOpenApiDoc } from './openapi';
 import type { Request, Response } from '@/types';
 import type { Server } from 'http';
+import type { Socket } from 'net';
 import { primaryLog } from '@/utils/logs';
 import cluster from 'cluster';
 
 let serverInstance: Server | null = null;
 let isShuttingDown = false;
 let shutdownListenersRegistered = false;
+const openConnections = new Set<Socket>();
 
 async function createServer(
   routesDir: string,
@@ -49,6 +51,10 @@ async function createServer(
       case 'node':
         server = await (handler as (config?: ServerConfig) => Promise<Server>)(config);
         serverInstance = server;
+        serverInstance.on('connection', (socket: Socket) => {
+          openConnections.add(socket);
+          socket.on('close', () => openConnections.delete(socket));
+        });
         break;
       case 'bun':
         server = (handler as (config?: ServerConfig) => void)(config);
@@ -91,13 +97,12 @@ function setupGracefulShutdown() {
     await runShutdownHook();
 
     if (serverInstance && typeof serverInstance.close === 'function') {
+      for (const socket of openConnections) socket.destroy();
+      openConnections.clear();
+
       await new Promise<void>((resolve) => {
         serverInstance!.close(() => resolve());
-
-        setTimeout(() => {
-          primaryLog('Forced shutdown after timeout');
-          resolve();
-        }, 3000);
+        setTimeout(() => resolve(), 3000);
       });
     }
 
