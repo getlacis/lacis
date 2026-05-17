@@ -186,8 +186,14 @@ export async function build(routesDir: string, entry?: string): Promise<void> {
         throw new Error(`Bun build failed:\n${msgs}`)
       }
     } else {
+      const tscBin = join(cwd, 'node_modules', '.bin', 'tsc')
+      if (!existsSync(tscBin)) {
+        throw new Error(
+          'TypeScript not found. Add it to your project: npm install --save-dev typescript'
+        )
+      }
       const outDir = getTsConfigOutDir(cwd) ?? 'dist'
-      await spawnAsync('npx', ['tsc', '--outDir', outDir], cwd)
+      await spawnAsync(tscBin, ['--outDir', outDir], cwd)
     }
   } finally {
     // Manifest is a build artifact — remove it from source after compilation
