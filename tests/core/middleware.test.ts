@@ -1,6 +1,7 @@
 import {
   addMiddleware,
   addPathMiddleware,
+  addExactPathMiddleware,
   runMiddlewares,
   collectMiddleware,
   resetMiddlewares,
@@ -70,50 +71,91 @@ describe('addMiddleware + runMiddlewares', () => {
   });
 });
 
-describe('addPathMiddleware + collectMiddleware', () => {
-  it('includes path middleware for an exact URL match', () => {
+describe('addPathMiddleware (cascade via +middleware.global.ts)', () => {
+  it('includes middleware for an exact URL match', () => {
     const fn = jest.fn();
     addPathMiddleware('/api', 'beforeRequest', fn);
-
-    const collected = collectMiddleware('/api');
-    expect(collected.beforeRequest).toContain(fn);
+    expect(collectMiddleware('/api').beforeRequest).toContain(fn);
   });
 
-  it('includes path middleware for a child URL', () => {
+  it('includes middleware for child URLs', () => {
     const fn = jest.fn();
     addPathMiddleware('/api', 'beforeRequest', fn);
-
-    const collected = collectMiddleware('/api/users/42');
-    expect(collected.beforeRequest).toContain(fn);
+    expect(collectMiddleware('/api/users/42').beforeRequest).toContain(fn);
   });
 
-  it('does not include path middleware for an unrelated URL', () => {
+  it('does not include middleware for unrelated URLs', () => {
     const fn = jest.fn();
     addPathMiddleware('/api', 'beforeRequest', fn);
-
-    const collected = collectMiddleware('/other');
-    expect(collected.beforeRequest).not.toContain(fn);
+    expect(collectMiddleware('/other').beforeRequest).not.toContain(fn);
   });
 
   it('includes root "/" middleware for all paths', () => {
     const fn = jest.fn();
     addPathMiddleware('/', 'beforeRequest', fn);
-
     expect(collectMiddleware('/anything').beforeRequest).toContain(fn);
     expect(collectMiddleware('/deep/nested/path').beforeRequest).toContain(fn);
   });
 
-  it('executes path middleware in the correct order (global → path hierarchy)', async () => {
+  it('executes in order: global → path hierarchy', async () => {
     const order: number[] = [];
-    const globalFn = jest.fn().mockImplementation(() => { order.push(1); });
-    const apiFn = jest.fn().mockImplementation(() => { order.push(2); });
-    const usersPath = jest.fn().mockImplementation(() => { order.push(3); });
-
-    addMiddleware('beforeRequest', globalFn);
-    addPathMiddleware('/api', 'beforeRequest', apiFn);
-    addPathMiddleware('/api/users', 'beforeRequest', usersPath);
+    addMiddleware('beforeRequest', jest.fn().mockImplementation(() => { order.push(1); }));
+    addPathMiddleware('/api', 'beforeRequest', jest.fn().mockImplementation(() => { order.push(2); }));
+    addPathMiddleware('/api/users', 'beforeRequest', jest.fn().mockImplementation(() => { order.push(3); }));
 
     await runMiddlewares('beforeRequest', makeReq('/api/users'), makeRes());
     expect(order).toEqual([1, 2, 3]);
+  });
+});
+
+describe('addExactPathMiddleware (exact via +middleware.ts)', () => {
+  it('includes middleware for the exact URL', () => {
+    const fn = jest.fn();
+    addExactPathMiddleware('/api', 'beforeRequest', fn);
+    expect(collectMiddleware('/api').beforeRequest).toContain(fn);
+  });
+
+  it('does not include middleware for child URLs', () => {
+    const fn = jest.fn();
+    addExactPathMiddleware('/api', 'beforeRequest', fn);
+    expect(collectMiddleware('/api/users').beforeRequest).not.toContain(fn);
+    expect(collectMiddleware('/api/users/42').beforeRequest).not.toContain(fn);
+  });
+
+  it('does not include middleware for unrelated URLs', () => {
+    const fn = jest.fn();
+    addExactPathMiddleware('/api', 'beforeRequest', fn);
+    expect(collectMiddleware('/other').beforeRequest).not.toContain(fn);
+  });
+
+  it('root "/" exact middleware only runs for "/"', () => {
+    const fn = jest.fn();
+    addExactPathMiddleware('/', 'beforeRequest', fn);
+    expect(collectMiddleware('/').beforeRequest).toContain(fn);
+    expect(collectMiddleware('/api').beforeRequest).not.toContain(fn);
+  });
+
+  it('cascade and exact can coexist on the same path', () => {
+    const cascadeFn = jest.fn();
+    const exactFn = jest.fn();
+    addPathMiddleware('/api', 'beforeRequest', cascadeFn);
+    addExactPathMiddleware('/api', 'beforeRequest', exactFn);
+
+    // Both run on /api
+    const atApi = collectMiddleware('/api');
+    expect(atApi.beforeRequest).toContain(cascadeFn);
+    expect(atApi.beforeRequest).toContain(exactFn);
+
+    // Only cascade runs on /api/users
+    const atChild = collectMiddleware('/api/users');
+    expect(atChild.beforeRequest).toContain(cascadeFn);
+    expect(atChild.beforeRequest).not.toContain(exactFn);
+  });
+
+  it('remove() unregisters the exact middleware', async () => {
+    const fn = jest.fn();
+    const { remove } = addExactPathMiddleware('/api', 'beforeRequest', fn);
+    remove();
+    expect(collectMiddleware('/api').beforeRequest).not.toContain(fn);
   });
 });

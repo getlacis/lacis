@@ -18,14 +18,17 @@ const globalMiddlewares: {
   onError: [],
 };
 
-const pathMiddlewares: PathMiddlewares = new Map();
+// +middleware.global.ts: cascades to all descendants
+const cascadeMiddlewares: PathMiddlewares = new Map();
+// +middleware.ts: applies only to routes at this exact directory level
+const exactMiddlewares: PathMiddlewares = new Map();
 
 function addMiddleware(
   middlewareName: MiddlewareType,
   callback: MiddlewareCallback
 ) {
   globalMiddlewares[middlewareName].push(callback);
-  
+
   return {
     remove: () => {
       const index = globalMiddlewares[middlewareName].indexOf(callback);
@@ -36,77 +39,76 @@ function addMiddleware(
   };
 }
 
-function addPathMiddleware(
-  path: string,
-  type: MiddlewareType,
-  callback: MiddlewareCallback
-) {
-  const normalizedPath = path === '/' ? '/' : path.replace(/\/+$/, '');
-  
-  if (!pathMiddlewares.has(normalizedPath)) {
-    pathMiddlewares.set(normalizedPath, {
-      beforeRequest: [],
-      afterRequest: [],
-      onError: []
-    });
+function addToMap(map: PathMiddlewares, normalizedPath: string, type: MiddlewareType, callback: MiddlewareCallback) {
+  if (!map.has(normalizedPath)) {
+    map.set(normalizedPath, { beforeRequest: [], afterRequest: [], onError: [] });
   }
-  
-  const middlewares = pathMiddlewares.get(normalizedPath)!;
-  middlewares[type].push(callback);
-  
+  map.get(normalizedPath)![type].push(callback);
   return {
     remove: () => {
-      if (pathMiddlewares.has(normalizedPath)) {
-        const middlewares = pathMiddlewares.get(normalizedPath)!;
-        const index = middlewares[type].indexOf(callback);
-        if (index !== -1) {
-          middlewares[type].splice(index, 1);
-        }
-      }
-    }
+      const entry = map.get(normalizedPath);
+      if (!entry) return;
+      const index = entry[type].indexOf(callback);
+      if (index !== -1) entry[type].splice(index, 1);
+    },
   };
 }
 
+function addPathMiddleware(p: string, type: MiddlewareType, callback: MiddlewareCallback) {
+  return addToMap(cascadeMiddlewares, p === "/" ? "/" : p.replace(/\/+$/, ""), type, callback);
+}
+
+function addExactPathMiddleware(p: string, type: MiddlewareType, callback: MiddlewareCallback) {
+  return addToMap(exactMiddlewares, p === "/" ? "/" : p.replace(/\/+$/, ""), type, callback);
+}
+
+function pushFromMap(
+  map: PathMiddlewares,
+  key: string,
+  result: { beforeRequest: MiddlewareCallback[]; afterRequest: MiddlewareCallback[]; onError: MiddlewareCallback[] }
+) {
+  const entry = map.get(key);
+  if (!entry) return;
+  result.beforeRequest.push(...entry.beforeRequest);
+  result.afterRequest.push(...entry.afterRequest);
+  result.onError.push(...entry.onError);
+}
+
 function collectMiddleware(url: string) {
-  const normalizedUrl = url === '/' ? '/' : url.replace(/\/+$/, '');
-  const segments = normalizedUrl.split('/').filter(Boolean);
-  
+  const normalizedUrl = url === "/" ? "/" : url.replace(/\/+$/, "");
+  const segments = normalizedUrl.split("/").filter(Boolean);
+
   const result = {
     beforeRequest: [...globalMiddlewares.beforeRequest],
     afterRequest: [...globalMiddlewares.afterRequest],
-    onError: [...globalMiddlewares.onError]
+    onError: [...globalMiddlewares.onError],
   };
-  
-  let currentPath = '';
-  
-  if (pathMiddlewares.has('/')) {
-    const rootMiddleware = pathMiddlewares.get('/')!;
-    result.beforeRequest.push(...rootMiddleware.beforeRequest);
-    result.afterRequest.push(...rootMiddleware.afterRequest);
-    result.onError.push(...rootMiddleware.onError);
-  }
-  
+
+  // Root cascade middleware always runs
+  pushFromMap(cascadeMiddlewares, "/", result);
+
+  // Root exact middleware only runs when requesting "/"
+  if (normalizedUrl === "/") pushFromMap(exactMiddlewares, "/", result);
+
+  let currentPath = "";
   for (const segment of segments) {
-    currentPath += '/' + segment;
-    
-    if (pathMiddlewares.has(currentPath)) {
-      const middleware = pathMiddlewares.get(currentPath)!;
-      result.beforeRequest.push(...middleware.beforeRequest);
-      result.afterRequest.push(...middleware.afterRequest);
-      result.onError.push(...middleware.onError);
-    }
+    currentPath += "/" + segment;
+    pushFromMap(cascadeMiddlewares, currentPath, result);
+    // Exact middleware only runs at the terminal segment
+    if (currentPath === normalizedUrl) pushFromMap(exactMiddlewares, currentPath, result);
   }
-  
+
   return result;
 }
 
 function hasMiddlewares(): boolean {
-  if (
+  return (
     globalMiddlewares.beforeRequest.length > 0 ||
     globalMiddlewares.afterRequest.length > 0 ||
-    globalMiddlewares.onError.length > 0
-  ) return true;
-  return pathMiddlewares.size > 0;
+    globalMiddlewares.onError.length > 0 ||
+    cascadeMiddlewares.size > 0 ||
+    exactMiddlewares.size > 0
+  );
 }
 
 async function runMiddlewares(
@@ -115,13 +117,13 @@ async function runMiddlewares(
   res: Response,
   context?: any
 ): Promise<boolean> {
-  const url = req.url?.split('?')[0] || '/';
+  const url = req.url?.split("?")[0] || "/";
   const middleware = collectMiddleware(url);
-  
+
   if (middleware[middlewareName].length === 0) {
     return true;
   }
-  
+
   for (const handler of middleware[middlewareName]) {
     try {
       const result = await handler(req, res, context);
@@ -143,56 +145,48 @@ async function runMiddlewares(
   return true;
 }
 
+function loadMiddlewareModule(
+  module: any,
+  map: PathMiddlewares,
+  prefix: string
+) {
+  if (!map.has(prefix)) {
+    map.set(prefix, { beforeRequest: [], afterRequest: [], onError: [] });
+  }
+  const entry = map.get(prefix)!;
+  for (const type of ["beforeRequest", "afterRequest", "onError"] as const) {
+    if (module[type]) {
+      const handlers = Array.isArray(module[type]) ? module[type] : [module[type]];
+      entry[type].push(...handlers);
+    }
+  }
+}
+
 async function loadMiddlewares(routesDir: string) {
-  pathMiddlewares.clear();
-  
+  cascadeMiddlewares.clear();
+  exactMiddlewares.clear();
+
   async function scanDir(dir: string, prefix = "") {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
-      
-      const middlewareFile = entries.find(
-        entry => entry.name === "+middleware.ts" || entry.name === "+middleware.js"
-      );
-      
-      if (middlewareFile) {
-        const fullPath = path.join(dir, middlewareFile.name);
+
+      for (const [filename, map] of [
+        ["+middleware.global.ts", cascadeMiddlewares],
+        ["+middleware.global.js", cascadeMiddlewares],
+        ["+middleware.ts", exactMiddlewares],
+        ["+middleware.js", exactMiddlewares],
+      ] as [string, PathMiddlewares][]) {
+        const file = entries.find((e) => e.name === filename);
+        if (!file) continue;
         try {
-          const absolutePath = path.resolve(fullPath);
-          const middlewareModule = await import(`${absolutePath}?update=${Date.now()}`);
-          
-          if (!pathMiddlewares.has(prefix)) {
-            pathMiddlewares.set(prefix, {
-              beforeRequest: [],
-              afterRequest: [],
-              onError: [],
-            });
-          }
-          
-          if (middlewareModule.beforeRequest) {
-            const middlewares = Array.isArray(middlewareModule.beforeRequest) 
-              ? middlewareModule.beforeRequest 
-              : [middlewareModule.beforeRequest];
-            pathMiddlewares.get(prefix)!.beforeRequest.push(...middlewares);
-          }
-          
-          if (middlewareModule.afterRequest) {
-            const middlewares = Array.isArray(middlewareModule.afterRequest) 
-              ? middlewareModule.afterRequest 
-              : [middlewareModule.afterRequest];
-            pathMiddlewares.get(prefix)!.afterRequest.push(...middlewares);
-          }
-          
-          if (middlewareModule.onError) {
-            const middlewares = Array.isArray(middlewareModule.onError) 
-              ? middlewareModule.onError 
-              : [middlewareModule.onError];
-            pathMiddlewares.get(prefix)!.onError.push(...middlewares);
-          }
+          const absolutePath = path.resolve(path.join(dir, file.name));
+          const mod = await import(`${absolutePath}?update=${Date.now()}`);
+          loadMiddlewareModule(mod, map, prefix);
         } catch (error) {
           console.error(`Error loading middleware for ${prefix}:`, error);
         }
       }
-      
+
       for (const entry of entries) {
         if (entry.isDirectory()) {
           await scanDir(
@@ -205,19 +199,20 @@ async function loadMiddlewares(routesDir: string) {
       console.error(`Error scanning directory ${dir}:`, error);
     }
   }
-  
+
   await scanDir(routesDir, "/");
 }
 
 function getPathMiddlewares() {
-  return pathMiddlewares;
+  return cascadeMiddlewares;
 }
 
 function resetMiddlewares() {
   globalMiddlewares.beforeRequest = [];
   globalMiddlewares.afterRequest = [];
   globalMiddlewares.onError = [];
-  pathMiddlewares.clear();
+  cascadeMiddlewares.clear();
+  exactMiddlewares.clear();
 }
 
 function registerMiddlewareConfig(config?: {
@@ -238,6 +233,7 @@ function registerMiddlewareConfig(config?: {
 export {
   addMiddleware,
   addPathMiddleware,
+  addExactPathMiddleware,
   runMiddlewares,
   loadMiddlewares,
   getPathMiddlewares,
