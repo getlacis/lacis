@@ -107,7 +107,9 @@ export async function GET(req: Request, res: Response) {
 |---|---|
 | `res.status(code)` | Set status code (chainable) |
 | `res.json(data)` | Send JSON response |
+| `res.html(data)` | Send HTML response |
 | `res.send(data)` | Send string or JSON |
+| `res.redirect(url, status?)` | Redirect to a URL (default 302) |
 | `res.setHeader(name, value)` | Set a response header |
 | `res.cookies.set(name, value, opts?)` | Set a cookie |
 | `res.cookies.delete(name, opts?)` | Delete a cookie |
