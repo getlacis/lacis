@@ -216,7 +216,7 @@ export const bunAdapter: Adapter = {
 
       primaryLog("🚀 Bun high-performance mode enabled");
 
-      await loadRoutes(routesDir);
+      if (!config.routes) await loadRoutes(routesDir);
       registerCorsConfig(config.cors);
       registerMiddlewareConfig(config.middleware);
 

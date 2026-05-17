@@ -105,7 +105,7 @@ export const nodeAdapter: Adapter = {
       }
 
       if (cluster.isWorker || !clusterConfig?.enabled) {
-        await loadRoutes(routesDir);
+        if (!config.routes) await loadRoutes(routesDir);
         registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
 

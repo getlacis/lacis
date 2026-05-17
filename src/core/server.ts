@@ -1,7 +1,9 @@
 import { getAdapter } from '@/adapters';
 import { defaultConfig, type ServerConfig } from "@/config/serverConfig";
-import { loadRoutes, router } from './router';
+import { loadRoutes, registerRoutes, resetRouter, router } from './router';
+import { resetMiddlewares } from './middleware';
 import { buildOpenApiDoc } from './openapi';
+import type { Request, Response } from '@/types';
 import type { Server } from 'http';
 import { primaryLog } from '@/utils/logs';
 import cluster from 'cluster';
@@ -18,13 +20,21 @@ async function createServer(
   const verbose = config.isDev && cluster.isPrimary && !process.env.LACIS_BUN_WORKER;
   
   try {
-    await loadRoutes(routesDir);
+    if (config.routes) {
+      resetRouter();
+      resetMiddlewares();
+      registerRoutes(config.routes);
+    } else {
+      await loadRoutes(routesDir);
+    }
 
+    // Build the doc before the adapter runs (needs routes loaded), but register
+    // the route after — node/bun adapters call loadRoutes internally which resets the router
+    let openapiDoc: object | null = null;
+    let openapiPath: string | null = null;
     if (config.openapi) {
-      const doc = await buildOpenApiDoc(config.openapi);
-      const openapiPath = config.openapi.path ?? "/openapi.json";
-      router.addRoute("GET", openapiPath, (_req: any, res: any) => res.json(doc));
-      if (verbose) primaryLog(`OpenAPI doc available at ${openapiPath}`);
+      openapiDoc = await buildOpenApiDoc(config.openapi);
+      openapiPath = config.openapi.path ?? "/openapi.json";
     }
 
     if (verbose) {
@@ -58,8 +68,13 @@ async function createServer(
         throw new Error(`Plateforme "${platform}" non supportée`);
     }
 
+    if (openapiDoc && openapiPath) {
+      router.addRoute("GET", openapiPath, (_req: Request, res: Response) => res.json(openapiDoc!));
+      if (verbose) primaryLog(`OpenAPI doc available at ${openapiPath}`);
+    }
+
     setupGracefulShutdown();
-    
+
     return server;
   } catch (error) {
     if (verbose) {
