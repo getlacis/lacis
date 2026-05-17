@@ -2,8 +2,8 @@ import fs from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { join } from "path";
-import type { ServerlessRoute } from "@/types";
-import { loadMiddlewares } from "./middleware";
+import type { ServerlessMiddleware, ServerlessRoute } from "@/types";
+import { loadMiddlewares, registerMiddlewares } from "./middleware";
 import { primaryLog } from "@/utils/logs";
 
 function parsePattern(pattern: string) {
@@ -336,9 +336,13 @@ export async function loadRoutes(routesDir: string) {
   const manifestPath = join(routesDir, '_manifest.js')
   if (existsSync(manifestPath)) {
     router.reset()
-    await loadMiddlewares(routesDir)
-    const mod = (await import(manifestPath)) as { routes: ServerlessRoute[] }
+    const mod = (await import(manifestPath)) as { routes: ServerlessRoute[]; middlewares?: ServerlessMiddleware[] }
     registerRoutes(mod.routes)
+    if (mod.middlewares) {
+      registerMiddlewares(mod.middlewares)
+    } else {
+      await loadMiddlewares(routesDir)
+    }
     return
   }
   return router.loadRoutes(routesDir)

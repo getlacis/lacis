@@ -41,6 +41,9 @@ jest.mock('@/core/middleware', () => ({
   hasMiddlewares: () => mockHasMiddlewares(),
   runMiddlewares: jest.fn(),
   registerMiddlewareConfig: (...a: any[]) => mockRegisterMiddlewareConfig(...a),
+  registerHooksConfig: jest.fn(),
+  hasNotFoundHook: () => false,
+  runNotFoundHook: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('@/core/cors', () => ({ registerCorsConfig: (...a: any[]) => mockRegisterCorsConfig(...a) }));
 jest.mock('@/utils/logs', () => ({ primaryLog: jest.fn() }));

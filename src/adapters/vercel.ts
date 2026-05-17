@@ -1,6 +1,6 @@
 import type { Adapter, ServerlessConfig, VercelRequest, VercelResponse, Request, Response } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
-import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
+import { runMiddlewares, registerMiddlewareConfig, registerMiddlewares, hasMiddlewares, registerHooksConfig, hasNotFoundHook, runNotFoundHook } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
 import { applyRequestMethods, applyResponseMethods, extractPathname, handleAdapterError } from "@/utils/adapter-base";
 
@@ -22,6 +22,8 @@ export const vercelAdapter: Adapter = {
         registerRoutes(config.routes);
         registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
+        registerMiddlewares(config.middlewares);
+        registerHooksConfig(config.hooks);
       })();
       return initPromise;
     };
@@ -45,6 +47,10 @@ export const vercelAdapter: Adapter = {
         const route = findRoute(extractPathname(req.url ?? "/"), req.method ?? "GET");
 
         if (!route) {
+          if (hasNotFoundHook()) {
+            await runNotFoundHook(req, res);
+            if (res.headersSent) return;
+          }
           res.status(404).json({ error: "Route not found" });
           return;
         }

@@ -1,9 +1,12 @@
 import type {
   MiddlewareCallback,
   MiddlewareType,
+  NotFoundHook,
   PathMiddlewares,
   Request,
   Response,
+  ServerlessMiddleware,
+  ShutdownHook,
 } from "@/types";
 import path from "path";
 import fs from "fs/promises";
@@ -16,6 +19,14 @@ const globalMiddlewares: {
   beforeRequest: [],
   afterRequest: [],
   onError: [],
+};
+
+const lifecycleHooks: {
+  onNotFound: NotFoundHook[];
+  onShutdown: ShutdownHook[];
+} = {
+  onNotFound: [],
+  onShutdown: [],
 };
 
 // +middleware.global.ts: cascades to all descendants
@@ -207,12 +218,57 @@ function getPathMiddlewares() {
   return cascadeMiddlewares;
 }
 
+function registerMiddlewares(middlewares?: ServerlessMiddleware[]) {
+  if (!middlewares?.length) return;
+  for (const entry of middlewares) {
+    const register = entry.type === 'cascade' ? addPathMiddleware : addExactPathMiddleware;
+    for (const type of ['beforeRequest', 'afterRequest', 'onError'] as const) {
+      const handlers = entry.module[type];
+      if (!handlers) continue;
+      const arr = Array.isArray(handlers) ? handlers : [handlers];
+      for (const h of arr) register(entry.path, type, h);
+    }
+  }
+}
+
+function registerHooksConfig(config?: {
+  onNotFound?: NotFoundHook;
+  onShutdown?: ShutdownHook;
+}) {
+  if (!config) return;
+  if (config.onNotFound) lifecycleHooks.onNotFound.push(config.onNotFound);
+  if (config.onShutdown) lifecycleHooks.onShutdown.push(config.onShutdown);
+}
+
+function hasNotFoundHook(): boolean {
+  return lifecycleHooks.onNotFound.length > 0;
+}
+
+async function runNotFoundHook(req: Request, res: Response): Promise<void> {
+  for (const handler of lifecycleHooks.onNotFound) {
+    await handler(req, res);
+    if (res.headersSent) return;
+  }
+}
+
+async function runShutdownHook(): Promise<void> {
+  for (const handler of lifecycleHooks.onShutdown) {
+    try {
+      await handler();
+    } catch (e) {
+      console.error("Error in onShutdown hook:", e);
+    }
+  }
+}
+
 function resetMiddlewares() {
   globalMiddlewares.beforeRequest = [];
   globalMiddlewares.afterRequest = [];
   globalMiddlewares.onError = [];
   cascadeMiddlewares.clear();
   exactMiddlewares.clear();
+  lifecycleHooks.onNotFound = [];
+  lifecycleHooks.onShutdown = [];
 }
 
 function registerMiddlewareConfig(config?: {
@@ -240,5 +296,10 @@ export {
   collectMiddleware,
   resetMiddlewares,
   registerMiddlewareConfig,
+  registerMiddlewares,
+  registerHooksConfig,
   hasMiddlewares,
+  hasNotFoundHook,
+  runNotFoundHook,
+  runShutdownHook,
 };

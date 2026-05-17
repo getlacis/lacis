@@ -1,7 +1,10 @@
 import {
   hasMiddlewares,
+  hasNotFoundHook,
+  registerHooksConfig,
   registerMiddlewareConfig,
   runMiddlewares,
+  runNotFoundHook,
 } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
@@ -219,6 +222,7 @@ export const bunAdapter: Adapter = {
       if (!config.routes) await loadRoutes(routesDir);
       registerCorsConfig(config.cors);
       registerMiddlewareConfig(config.middleware);
+      registerHooksConfig(config.hooks);
 
       const defaultHeadersEntries = defaultHeaders
         ? Object.entries(defaultHeaders)
@@ -255,8 +259,10 @@ export const bunAdapter: Adapter = {
             const route = findRoute(pathname, request.method);
 
             if (!route) {
-              if (hasMiddlewares())
-                await runMiddlewares("onError", req as any, res as any);
+              if (hasNotFoundHook()) {
+                await runNotFoundHook(req as any, res as any);
+                if (res.headersSent) return buildResponse(res);
+              }
               return new Response(
                 JSON.stringify({ error: "Route not found" }),
                 {

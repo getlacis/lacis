@@ -6,7 +6,10 @@ const mockLoadRoutes = jest.fn().mockResolvedValue(undefined);
 const mockFindRoute = jest.fn();
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
 const mockRegisterMiddlewareConfig = jest.fn();
+const mockRegisterHooksConfig = jest.fn();
 const mockHasMiddlewares = jest.fn().mockReturnValue(false);
+const mockHasNotFoundHook = jest.fn().mockReturnValue(false);
+const mockRunNotFoundHook = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/core/router', () => ({
   loadRoutes: (...args: any[]) => mockLoadRoutes(...args),
@@ -16,7 +19,10 @@ jest.mock('@/core/router', () => ({
 jest.mock('@/core/middleware', () => ({
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
   registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
+  registerHooksConfig: (...args: any[]) => mockRegisterHooksConfig(...args),
   hasMiddlewares: () => mockHasMiddlewares(),
+  hasNotFoundHook: () => mockHasNotFoundHook(),
+  runNotFoundHook: (...args: any[]) => mockRunNotFoundHook(...args),
 }));
 
 jest.mock('@/utils/logs', () => ({ primaryLog: jest.fn() }));
@@ -57,6 +63,8 @@ beforeEach(() => {
   mockLoadRoutes.mockResolvedValue(undefined);
   mockRunMiddlewares.mockResolvedValue(true);
   mockHasMiddlewares.mockReturnValue(false);
+  mockHasNotFoundHook.mockReturnValue(false);
+  mockRunNotFoundHook.mockResolvedValue(undefined);
   mockFindRoute.mockReturnValue(null);
   mockBunServe.mockReturnValue({ stop: mockBunStop });
 });
@@ -186,10 +194,12 @@ describe('bunAdapter — middleware', () => {
     expect(order.indexOf('handler')).toBeLessThan(order.indexOf('afterRequest'));
   });
 
-  it('calls onError middleware when no route is found', async () => {
+  it('calls onNotFound hook when no route is found', async () => {
+    mockHasNotFoundHook.mockReturnValue(true);
     const fetch = await startAndCaptureFetch();
     await fetch(makeRequest('/missing'));
-    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything());
+    expect(mockRunNotFoundHook).toHaveBeenCalled();
+    expect(mockRunMiddlewares).not.toHaveBeenCalledWith('onError', expect.anything(), expect.anything());
   });
 
   it('calls onError middleware when the route carries an error', async () => {

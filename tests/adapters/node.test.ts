@@ -9,7 +9,10 @@ const mockLoadRoutes = jest.fn().mockResolvedValue(undefined);
 const mockFindRoute = jest.fn();
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
 const mockRegisterMiddlewareConfig = jest.fn();
+const mockRegisterHooksConfig = jest.fn();
 const mockHasMiddlewares = jest.fn().mockReturnValue(true);
+const mockHasNotFoundHook = jest.fn().mockReturnValue(false);
+const mockRunNotFoundHook = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/core/router', () => ({
   loadRoutes: (...args: any[]) => mockLoadRoutes(...args),
@@ -19,7 +22,10 @@ jest.mock('@/core/router', () => ({
 jest.mock('@/core/middleware', () => ({
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
   registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
+  registerHooksConfig: (...args: any[]) => mockRegisterHooksConfig(...args),
   hasMiddlewares: () => mockHasMiddlewares(),
+  hasNotFoundHook: () => mockHasNotFoundHook(),
+  runNotFoundHook: (...args: any[]) => mockRunNotFoundHook(...args),
 }));
 
 import { nodeAdapter } from '@/adapters/node';

@@ -1,6 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Route, SSEClient, SSEClientOptions, SSEEventHandlers, RouteHandlers, CorsConfig } from ".";
-import type { MiddlewareCallback } from "./middleware";
+import type { MiddlewareCallback, NotFoundHook, ShutdownHook } from "./middleware";
+
+interface ServerlessMiddleware {
+  path: string;
+  type: 'cascade' | 'exact';
+  module: {
+    beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
+    afterRequest?: MiddlewareCallback | MiddlewareCallback[];
+    onError?: MiddlewareCallback | MiddlewareCallback[];
+  };
+}
 
 interface AdapterRequest extends IncomingMessage {
   params?: Record<string, string>;
@@ -35,6 +45,11 @@ interface ServerlessConfig {
     afterRequest?: MiddlewareCallback | MiddlewareCallback[];
     onError?: MiddlewareCallback | MiddlewareCallback[];
   };
+  middlewares?: ServerlessMiddleware[];
+  hooks?: {
+    onNotFound?: NotFoundHook;
+    onShutdown?: ShutdownHook;
+  };
 }
 
 interface Adapter {
@@ -49,4 +64,5 @@ export type {
   AdapterResponse,
   ServerlessRoute,
   ServerlessConfig,
+  ServerlessMiddleware,
 };

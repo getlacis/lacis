@@ -1,6 +1,6 @@
 import type { Adapter, ServerlessConfig, NetlifyEvent, NetlifyContext, Request, Response } from "@/types";
 import { findRoute, isRouteError, registerRoutes } from "@/core/router";
-import { runMiddlewares, registerMiddlewareConfig, hasMiddlewares } from "@/core/middleware";
+import { runMiddlewares, registerMiddlewareConfig, registerMiddlewares, hasMiddlewares, registerHooksConfig, hasNotFoundHook, runNotFoundHook } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
 import { applyRequestMethods, applyResponseMethods, handleAdapterError } from "@/utils/adapter-base";
 import { IncomingMessage, ServerResponse } from "http";
@@ -34,6 +34,8 @@ export const netlifyAdapter: Adapter = {
         registerRoutes(config.routes);
         registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
+        registerMiddlewares(config.middlewares);
+        registerHooksConfig(config.hooks);
       })();
       return initPromise;
     };
@@ -109,6 +111,10 @@ export const netlifyAdapter: Adapter = {
         const route = findRoute(event.path, event.httpMethod);
 
         if (!route) {
+          if (hasNotFoundHook()) {
+            await runNotFoundHook(req, res);
+            if (headersSent) return netlifyResponse(res.statusCode, responseHeaders, multiValueResponseHeaders, responseBody);
+          }
           return { statusCode: 404, body: JSON.stringify({ error: "Route not found" }) };
         }
 

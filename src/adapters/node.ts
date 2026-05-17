@@ -1,7 +1,10 @@
 import {
   hasMiddlewares,
+  hasNotFoundHook,
+  registerHooksConfig,
   registerMiddlewareConfig,
   runMiddlewares,
+  runNotFoundHook,
 } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
@@ -108,6 +111,7 @@ export const nodeAdapter: Adapter = {
         if (!config.routes) await loadRoutes(routesDir);
         registerCorsConfig(config.cors);
         registerMiddlewareConfig(config.middleware);
+        registerHooksConfig(config.hooks);
 
         const handleRequest = async (
           req: LacisRequest,
@@ -141,8 +145,10 @@ export const nodeAdapter: Adapter = {
             const route = findRoute(pathname, req.method || "GET");
 
             if (!route) {
-              if (hasMiddlewares())
-                await runMiddlewares("onError", req as any, res as any);
+              if (hasNotFoundHook()) {
+                await runNotFoundHook(req as any, res as any);
+                if (res.headersSent) { requestTracker?.end(res.statusCode); return; }
+              }
               res.status(404).json({ error: "Route not found" });
               requestTracker?.end(404);
               return;

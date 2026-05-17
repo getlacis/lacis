@@ -1,7 +1,7 @@
 import { getAdapter } from '@/adapters';
 import { defaultConfig, type ServerConfig } from "@/config/serverConfig";
 import { loadRoutes, registerRoutes, resetRouter, router } from './router';
-import { resetMiddlewares } from './middleware';
+import { resetMiddlewares, runShutdownHook } from './middleware';
 import { buildOpenApiDoc } from './openapi';
 import type { Request, Response } from '@/types';
 import type { Server } from 'http';
@@ -85,20 +85,22 @@ function setupGracefulShutdown() {
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    
+
     primaryLog(`\n${signal} received, shutting down...`);
-        
+
+    await runShutdownHook();
+
     if (serverInstance && typeof serverInstance.close === 'function') {
       await new Promise<void>((resolve) => {
         serverInstance!.close(() => resolve());
-        
+
         setTimeout(() => {
           primaryLog('Forced shutdown after timeout');
           resolve();
         }, 3000);
       });
     }
-    
+
     process.exit(0);
   };
   

@@ -8,3 +8,5 @@ export const routes = [
   { path: "/users", handlers: _route_1 },
   { path: "/users/:id", handlers: _route_2 },
 ];
+
+export const middlewares = [];

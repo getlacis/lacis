@@ -1,4 +1,4 @@
-import type { MiddlewareCallback } from "./middleware";
+import type { MiddlewareCallback, NotFoundHook, ShutdownHook } from "./middleware";
 import type { Request, Response } from "./http";
 import type { ServerlessRoute } from "./adapter";
 
@@ -50,7 +50,11 @@ interface ServerConfig {
     afterRequest?: MiddlewareCallback | MiddlewareCallback[];
     onError?: MiddlewareCallback | MiddlewareCallback[];
   };
-  
+  hooks?: {
+    onNotFound?: NotFoundHook;
+    onShutdown?: ShutdownHook;
+  };
+
   routes?: ServerlessRoute[];
 
   openapi?: {

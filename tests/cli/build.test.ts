@@ -50,7 +50,13 @@ describe('generateManifest — output file', () => {
     expect(content).toContain('export const routes = [');
   });
 
-  it('does not emit import statements when there are no routes', async () => {
+  it('always emits the middlewares export even when no middleware files exist', async () => {
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    expect(content).toContain('export const middlewares = [');
+  });
+
+  it('does not emit import statements when there are no routes or middleware files', async () => {
     await generateManifest(ROUTES);
     const content: string = mockWriteFile.mock.calls[0][1];
     expect(content).not.toContain('import *');
@@ -136,6 +142,69 @@ describe('generateManifest — route discovery', () => {
     await expect(generateManifest(ROUTES)).resolves.toBeUndefined();
     const content: string = mockWriteFile.mock.calls[0][1];
     expect(content).toContain('export const routes = [');
+    expect(content).toContain('export const middlewares = [');
     expect(content).not.toContain('_route_');
+    expect(content).not.toContain('_mw_');
+  });
+});
+
+describe('generateManifest — middleware discovery', () => {
+  it('discovers a +middleware.global.ts at the root and emits it as cascade', async () => {
+    mockReaddir.mockResolvedValue([file('+middleware.global.ts')]);
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    expect(content).toContain("type: 'cascade'");
+    expect(content).toContain("path: '/'");
+    expect(content).toContain("'./+middleware.global.js'");
+  });
+
+  it('discovers a +middleware.ts at the root and emits it as exact', async () => {
+    mockReaddir.mockResolvedValue([file('+middleware.ts')]);
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    expect(content).toContain("type: 'exact'");
+    expect(content).toContain("path: '/'");
+    expect(content).toContain("'./+middleware.js'");
+  });
+
+  it('discovers middleware in a subdirectory with the correct path', async () => {
+    mockReaddir.mockImplementation((d: string) => {
+      if (d === ROUTES) return Promise.resolve([dir('api')]);
+      if (d.endsWith('/api')) return Promise.resolve([file('+middleware.global.ts')]);
+      return Promise.resolve([]);
+    });
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    expect(content).toContain("path: '/api'");
+    expect(content).toContain("type: 'cascade'");
+  });
+
+  it('can discover both cascade and exact middleware in the same directory', async () => {
+    mockReaddir.mockResolvedValue([file('+middleware.global.ts'), file('+middleware.ts')]);
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    expect(content).toContain("type: 'cascade'");
+    expect(content).toContain("type: 'exact'");
+    expect((content.match(/_mw_/g) ?? []).length).toBeGreaterThanOrEqual(4); // 2 imports + 2 entries
+  });
+
+  it('prefers .ts over .js for middleware files', async () => {
+    mockReaddir.mockResolvedValue([file('+middleware.global.ts'), file('+middleware.global.js')]);
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    const mwImportCount = (content.match(/import \* as _mw_/g) ?? []).length;
+    expect(mwImportCount).toBe(1);
+  });
+
+  it('emits unique binding names for each middleware file', async () => {
+    mockReaddir.mockImplementation((d: string) => {
+      if (d === ROUTES) return Promise.resolve([file('+middleware.global.ts'), dir('api')]);
+      if (d.endsWith('/api')) return Promise.resolve([file('+middleware.ts')]);
+      return Promise.resolve([]);
+    });
+    await generateManifest(ROUTES);
+    const content: string = mockWriteFile.mock.calls[0][1];
+    expect(content).toContain('_mw_0');
+    expect(content).toContain('_mw_1');
   });
 });

@@ -1,7 +1,7 @@
 import supertest, { type Agent } from 'supertest';
 import { createServer } from '@/core/server';
 import type { CorsConfig, ServerConfig, ServerlessRoute } from '@/types';
-import type { MiddlewareCallback } from '@/types/middleware';
+import type { MiddlewareCallback, NotFoundHook, ShutdownHook } from '@/types/middleware';
 import type { Server } from 'http';
 
 export interface TestServerOptions {
@@ -11,6 +11,10 @@ export interface TestServerOptions {
     beforeRequest?: MiddlewareCallback | MiddlewareCallback[];
     afterRequest?: MiddlewareCallback | MiddlewareCallback[];
     onError?: MiddlewareCallback | MiddlewareCallback[];
+  };
+  hooks?: {
+    onNotFound?: NotFoundHook;
+    onShutdown?: ShutdownHook;
   };
   openapi?: ServerConfig['openapi'];
 }
@@ -28,6 +32,7 @@ export async function createTestApp(options: TestServerOptions = {}): Promise<Te
     routes: options.routes ?? [],
     cors: options.cors,
     middleware: options.middleware,
+    hooks: options.hooks,
     openapi: options.openapi,
   }) as Server;
 

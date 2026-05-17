@@ -5,7 +5,10 @@ const mockFindRoute = jest.fn();
 const mockIsRouteError = jest.fn((obj: any) => "error" in obj);
 const mockRunMiddlewares = jest.fn().mockResolvedValue(true);
 const mockRegisterMiddlewareConfig = jest.fn();
+const mockRegisterHooksConfig = jest.fn();
 const mockHasMiddlewares = jest.fn().mockReturnValue(true);
+const mockHasNotFoundHook = jest.fn().mockReturnValue(false);
+const mockRunNotFoundHook = jest.fn().mockResolvedValue(undefined);
 
 jest.mock("@/core/router", () => ({
   registerRoutes: (...args: any[]) => mockRegisterRoutes(...args),
@@ -13,10 +16,16 @@ jest.mock("@/core/router", () => ({
   isRouteError: (obj: any) => mockIsRouteError(obj),
 }));
 
+const mockRegisterMiddlewares = jest.fn();
+
 jest.mock("@/core/middleware", () => ({
   runMiddlewares: (...args: any[]) => mockRunMiddlewares(...args),
   registerMiddlewareConfig: (...args: any[]) => mockRegisterMiddlewareConfig(...args),
+  registerMiddlewares: (...args: any[]) => mockRegisterMiddlewares(...args),
+  registerHooksConfig: (...args: any[]) => mockRegisterHooksConfig(...args),
   hasMiddlewares: () => mockHasMiddlewares(),
+  hasNotFoundHook: () => mockHasNotFoundHook(),
+  runNotFoundHook: (...args: any[]) => mockRunNotFoundHook(...args),
 }));
 
 import { netlifyAdapter } from "@/adapters/netlify";

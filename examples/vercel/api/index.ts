@@ -1,4 +1,4 @@
 import { vercelAdapter } from 'lacis/adapters'
-import { routes } from '../routes/_manifest.js'
+import { routes, middlewares } from '../routes/_manifest.js'
 
-export default vercelAdapter.createHandler({ routes })
+export default vercelAdapter.createHandler({ routes, middlewares })

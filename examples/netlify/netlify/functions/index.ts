@@ -1,6 +1,6 @@
 import { netlifyAdapter } from 'lacis/adapters'
-import { routes } from '../../routes/_manifest.js'
+import { routes, middlewares } from '../../routes/_manifest.js'
 
-const handler = netlifyAdapter.createHandler({ routes }) as Function
+const handler = netlifyAdapter.createHandler({ routes, middlewares }) as Function
 
 export { handler }
