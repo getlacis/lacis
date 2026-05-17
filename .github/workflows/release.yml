@@ -52,3 +52,13 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --provenance --access public
+
+      - name: Trigger create-lacis release
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          gh api repos/getlacis/create-lacis/dispatches \
+            --method POST \
+            -f event_type=lacis-released \
+            -f "client_payload[version]=$VERSION"
