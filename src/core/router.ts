@@ -349,10 +349,13 @@ export function findRoute(url: string, method: string = "GET"): FindRouteResult 
 }
 
 export function getRoutesDir(customDir?: string) {
-  const defaultDir =
-    process.env.ROUTES_DIR ??
-    (process.env.NODE_ENV === 'production' ? 'dist/routes' : 'routes')
-  return path.resolve(process.cwd(), customDir ?? defaultDir)
+  const isProd = process.env.NODE_ENV === 'production'
+  const raw = process.env.ROUTES_DIR ?? customDir ?? (isProd ? 'dist/routes' : 'routes')
+  // In production, prefix relative paths with dist/ so they point to compiled output
+  const resolved = isProd && !path.isAbsolute(raw) && !raw.startsWith('dist/')
+    ? path.join('dist', raw)
+    : raw
+  return path.resolve(process.cwd(), resolved)
 }
 
 export function getRouterStats() {
