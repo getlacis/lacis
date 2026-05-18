@@ -2,6 +2,8 @@
 
 Zero-dependency TypeScript web framework with file-based routing.
 
+**Documentation:** [lacis.lycia.dev](https://lacis.lycia.dev)
+
 ## Features
 
 - **File-based routing** — routes generated automatically from your `routes/` folder
