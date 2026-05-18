@@ -1,4 +1,5 @@
 import { hasMiddlewares, runMiddlewares } from "@/core/middleware";
+import { isHttpError, normalizeError, sendError } from "@/core/errors";
 import type { Request, Response } from "@/types";
 import { createSSEClient } from "@/sse/client";
 import { initSSE } from "@/sse/server";
@@ -331,8 +332,10 @@ export function parseQueryString(url: string): Record<string, string> {
 }
 
 export async function handleAdapterError(req: Request, res: Response, error: unknown): Promise<void> {
-  console.error("[lacis] Unhandled error:", error);
-  if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error });
+  const httpError = isHttpError(error) ? error : normalizeError(error);
+  if (httpError.log) console.error("[lacis] Error:", error);
+  if (hasMiddlewares()) await runMiddlewares("onError", req, res, { error: httpError });
+  if (!res.headersSent) sendError(httpError, res);
 }
 
 export function applyResponseMethods(res: any): void {

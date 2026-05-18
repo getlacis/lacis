@@ -8,6 +8,6 @@ export * from "@/core/errors";
 export * from "@/core/rateLimit";
 export * from "@/core/responseCache";
 export * from "@/core/cors";
-export * from "@/sse/server";
+export { initSSE } from "@/sse/server";
 export * from "@/sse/client";
 export * from "@/types/index";
