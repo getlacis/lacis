@@ -235,9 +235,9 @@ describe('bunAdapter — SSE', () => {
     const fetch = await startAndCaptureFetch();
     mockFindRoute.mockReturnValue(
       makeRoute(async (_req: LacisRequest, res: LacisResponse) => {
-        res.initSSE({ timeout: 60000 });
-        res.sseSend('hello');
-        res.sseClose();
+        const sse = res.initSSE({ timeout: 60000 });
+        sse.send('hello');
+        sse.close();
       }),
     );
     const res = await fetch(makeRequest('/sse'));
@@ -250,10 +250,10 @@ describe('bunAdapter — SSE', () => {
     const fetch = await startAndCaptureFetch();
     mockFindRoute.mockReturnValue(
       makeRoute(async (_req: LacisRequest, res: LacisResponse) => {
-        res.initSSE({ timeout: 60000 });
-        res.sseEvent('tick', { n: 1 });
-        res.sseEvent('tick', { n: 2 });
-        res.sseClose();
+        const sse = res.initSSE({ timeout: 60000 });
+        sse.event('tick', { n: 1 });
+        sse.event('tick', { n: 2 });
+        sse.close();
       }),
     );
     const res = await fetch(makeRequest('/sse'));

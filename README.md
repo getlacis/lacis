@@ -326,24 +326,26 @@ Sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers o
 import type { Request, Response } from 'lacis'
 
 export async function GET(req: Request, res: Response) {
-  res.initSSE()
+  const sse = res.initSSE()
 
-  res.sseJson({ status: 'connected' })
-  res.sseEvent('update', { id: 1, value: 42 })
-  res.sseClose()
+  sse.json({ status: 'connected' })
+  sse.event('update', { id: 1, value: 42 })
+  sse.close()
 }
 ```
 
+`res.initSSE(options?)` returns an `SSEContext` object:
+
 | Method | Description |
 |---|---|
-| `res.initSSE(options?)` | Initialize SSE response |
-| `res.sseSend(data)` | Send raw string data |
-| `res.sseJson(data)` | Send JSON data |
-| `res.sseEvent(event, data)` | Send named event with JSON data |
-| `res.sseComment(comment)` | Send a comment (keepalive) |
-| `res.sseId(id)` | Set event ID |
-| `res.sseRetry(ms)` | Set client retry interval |
-| `res.sseClose(comment?)` | Close the connection |
+| `sse.send(data)` | Send raw string data |
+| `sse.json(data)` | Send JSON data |
+| `sse.event(event, data)` | Send named event with JSON data |
+| `sse.comment(text)` | Send a comment (keepalive) |
+| `sse.id(id)` | Set event ID |
+| `sse.retry(ms)` | Set client retry interval |
+| `sse.close(comment?)` | Close the connection |
+| `sse.error(event, message, code?, details?)` | Send error event and close |
 
 **Client**
 

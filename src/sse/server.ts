@@ -1,86 +1,78 @@
 import { ServerResponse } from "http";
 import type { SSEOptions } from "@/types/index";
 
-export function initSSE(res: ServerResponse, options?: SSEOptions): ReturnType<typeof setTimeout> {
-  const cacheControl = options?.headers?.["Cache-Control"] || "no-cache";
-  const connection = options?.headers?.["Connection"] || "keep-alive";
+interface ResLike {
+  readonly writableEnded: boolean;
+  write(chunk: any): any;
+  end(data?: any): any;
+  writeHead(code: number, headers?: Record<string, string>): any;
+  on(event: string, cb: () => void): any;
+}
 
-  const timeout = options?.timeout || 300000;
+export class SSEContext {
+  private _timeoutId: ReturnType<typeof setTimeout>;
+
+  constructor(private _res: ResLike, timeout: number) {
+    this._timeoutId = setTimeout(() => _res.end(), timeout);
+    _res.on("close", () => clearTimeout(this._timeoutId));
+  }
+
+  send(data: string): boolean {
+    if (this._res.writableEnded) return false;
+    return this._res.write(`data: ${data}\n\n`);
+  }
+
+  json(data: any): boolean {
+    if (this._res.writableEnded) return false;
+    return this._res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  event(event: string, data: any): boolean {
+    if (this._res.writableEnded) return false;
+    this._res.write(`event: ${event}\n`);
+    return this._res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  comment(text: string): boolean {
+    if (this._res.writableEnded) return false;
+    return this._res.write(`: ${text}\n\n`);
+  }
+
+  id(id: string): boolean {
+    if (this._res.writableEnded) return false;
+    return this._res.write(`id: ${id}\n\n`);
+  }
+
+  retry(ms: number): boolean {
+    if (this._res.writableEnded) return false;
+    return this._res.write(`retry: ${ms}\n\n`);
+  }
+
+  close(comment: string = "Connection closed"): void {
+    clearTimeout(this._timeoutId);
+    this._res.write(`: ${comment}\n\n`);
+    this._res.end();
+  }
+
+  error(event: string, message: string, code = 500, details?: string): void {
+    clearTimeout(this._timeoutId);
+    this._res.write(`event: ${event}\n`);
+    this._res.write(`data: ${JSON.stringify({ message, code, details: details ?? null })}\n\n`);
+    this._res.end();
+  }
+}
+
+export function initSSE(res: ServerResponse, options?: SSEOptions): SSEContext {
+  const cacheControl = options?.headers?.["Cache-Control"] ?? "no-cache";
+  const connection = options?.headers?.["Connection"] ?? "keep-alive";
+  const timeout = options?.timeout ?? 300000;
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": cacheControl,
     Connection: connection,
-    ...(options?.headers || {}),
+    ...(options?.headers ?? {}),
   });
 
-  // Doing this to prevent users from keeping connections open indefinitely, which can cause memory leaks
-  const timeoutId = setTimeout(() => {
-    res.end();
-  }, timeout);
-
-  res.on('close', () => {
-    clearTimeout(timeoutId);
-  });
-
-  return timeoutId;
-}
-
-export function send(res: ServerResponse, data: any): boolean {
-  if (res.writableEnded) return false;
-  return res.write(`data: ${data}\n\n`);
-}
-
-export function sendJson(res: ServerResponse, data: any): boolean {
-  if (res.writableEnded) return false;
-  return res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
-export function sendEvent(res: ServerResponse, event: string, data: any): boolean {
-  if (res.writableEnded) return false;
-  res.write(`event: ${event}\n`);
-  return res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
-export function sseComment(res: ServerResponse, comment: string): boolean {
-  if (res.writableEnded) return false;
-  return res.write(`: ${comment}\n\n`);
-}
-
-export function sseId(res: ServerResponse, id: string): boolean {
-  if (res.writableEnded) return false;
-  return res.write(`id: ${id}\n\n`);
-}
-
-export function sseRetry(res: ServerResponse, ms: number): boolean {
-  if (res.writableEnded) return false;
-  return res.write(`retry: ${ms}\n\n`);
-}
-
-export function sseClose(
-  res: ServerResponse,
-  comment: string = "Connection closed"
-) {
-  res.write(`: ${comment}\n\n`);
-  res.end();
-}
-
-export function sseEventError(
-  res: ServerResponse,
-  event: string,
-  error: string,
-  code: number = 500,
-  details?: string
-) {
-  res.writeHead(code, { "Content-Type": "text/event-stream" });
-  res.write(`event: ${event}\n`);
-
-  const errorData = {
-    message: error,
-    code: code,
-    details: details || null,
-  };
-
-  res.write(`data: ${JSON.stringify(errorData)}\n\n`);
-  res.end();
+  return new SSEContext(res as any, timeout);
 }

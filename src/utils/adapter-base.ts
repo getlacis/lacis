@@ -1,17 +1,7 @@
 import { hasMiddlewares, runMiddlewares } from "@/core/middleware";
 import type { Request, Response } from "@/types";
 import { createSSEClient } from "@/sse/client";
-import {
-  initSSE,
-  send,
-  sendEvent,
-  sendJson,
-  sseClose,
-  sseComment,
-  sseEventError,
-  sseId,
-  sseRetry,
-} from "@/sse/server";
+import { initSSE } from "@/sse/server";
 import type {
   CookieOptions,
   SSEClient,
@@ -299,30 +289,6 @@ export function withResponseMethods<T extends ResponseMixinBase>(Base: T) {
     initSSE(options?: SSEOptions) {
       return initSSE(this as any, options);
     }
-    sseSend(data: string) {
-      send(this as any, data);
-    }
-    sseJson(data: any) {
-      sendJson(this as any, data);
-    }
-    sseEvent(event: string, data: any) {
-      sendEvent(this as any, event, data);
-    }
-    sseComment(comment: string) {
-      sseComment(this as any, comment);
-    }
-    sseId(id: string) {
-      sseId(this as any, id);
-    }
-    sseRetry(ms: number) {
-      sseRetry(this as any, ms);
-    }
-    sseClose(comment?: string) {
-      sseClose(this as any, comment);
-    }
-    sseError(event: string, error: string, code = 500, details?: string) {
-      sseEventError(this as any, event, error, code, details);
-    }
   };
 }
 
@@ -377,14 +343,6 @@ export function applyResponseMethods(res: any): void {
   res.html = p.html;
   res.redirect = p.redirect;
   res.initSSE = p.initSSE;
-  res.sseSend = p.sseSend;
-  res.sseJson = p.sseJson;
-  res.sseEvent = p.sseEvent;
-  res.sseComment = p.sseComment;
-  res.sseId = p.sseId;
-  res.sseRetry = p.sseRetry;
-  res.sseClose = p.sseClose;
-  res.sseError = p.sseError;
 
   const cookieJar = new ResponseCookiesImpl();
   res.cookies = cookieJar;

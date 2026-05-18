@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from "http";
 import type {
   SSEClient,
   SSEClientOptions,
+  SSEContext,
   SSEEventHandlers,
   SSEOptions,
 } from "./";
@@ -57,15 +58,7 @@ interface Response extends ServerResponse {
   redirect(url: string, status?: number): void;
   send(data: any): void;
   status(code: number): Response;
-  initSSE(options?: SSEOptions): void;
-  sseSend(data: string): void;
-  sseJson(data: any): void;
-  sseEvent(event: string, data: any): void;
-  sseComment(comment: string): void;
-  sseId(id: string): void;
-  sseRetry(ms: number): void;
-  sseClose(comment?: string): void;
-  sseError(event: string, error: string, code?: number, details?: string): void;
+  initSSE(options?: SSEOptions): SSEContext;
 }
 
 export type { Request, Response, UploadedFile, CookieOptions, RequestCookies, ResponseCookies };

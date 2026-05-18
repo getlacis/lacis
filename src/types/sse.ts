@@ -1,3 +1,14 @@
+interface SSEContext {
+  send(data: string): boolean;
+  json(data: any): boolean;
+  event(event: string, data: any): boolean;
+  comment(text: string): boolean;
+  id(id: string): boolean;
+  retry(ms: number): boolean;
+  close(comment?: string): void;
+  error(event: string, message: string, code?: number, details?: string): void;
+}
+
 interface SSEOptions {
   headers?: Record<string, string>;
   timeout?: number;
@@ -29,4 +40,4 @@ interface SSEClient {
 
 // All sse type event available
 
-export type { SSEOptions, SSEClientOptions, SSEEventHandlers, SSEClient };
+export type { SSEContext, SSEOptions, SSEClientOptions, SSEEventHandlers, SSEClient };

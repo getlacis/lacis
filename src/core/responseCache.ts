@@ -58,6 +58,20 @@ function interceptResponse(
     return origSetHeader(name, value)
   }
 
+  if (typeof (res as any).writeHead === "function") {
+    const origWriteHead = (res as any).writeHead.bind(res)
+    ;(res as any).writeHead = (code: number, headers?: Record<string, any>) => {
+      if (headers) {
+        for (const [k, v] of Object.entries(headers)) {
+          const lo = k.toLowerCase()
+          if (lo === "content-type") contentType = String(v)
+          if (lo === "set-cookie") hasCookie = true
+        }
+      }
+      return origWriteHead(code, headers)
+    }
+  }
+
   // Guard against double-end (e.g. error handler calling end after handler already did)
   const origEnd = (res as any).end.bind(res)
   ;(res as any).end = (data?: any) => {

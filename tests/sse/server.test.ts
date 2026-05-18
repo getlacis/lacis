@@ -1,14 +1,4 @@
-import {
-  initSSE,
-  send,
-  sendJson,
-  sendEvent,
-  sseComment,
-  sseId,
-  sseRetry,
-  sseClose,
-  sseEventError,
-} from '@/sse/server';
+import { initSSE, SSEContext } from '@/sse/server';
 
 function makeRes() {
   const written: string[] = [];
@@ -109,176 +99,198 @@ describe('initSSE', () => {
     expect(res.written).toHaveLength(0);
   });
 
-  it('returns the timeout id', () => {
+  it('returns an SSEContext', () => {
     const res = makeRes();
-    const id = initSSE(res as any);
-    expect(id).toBeDefined();
+    const sse = initSSE(res as any);
+    expect(sse).toBeInstanceOf(SSEContext);
   });
 });
 
 
-describe('send', () => {
+describe('SSEContext.send', () => {
   it('writes data: <value>\\n\\n', () => {
     const res = makeRes();
-    send(res as any, 'hello');
+    const sse = initSSE(res as any);
+    sse.send('hello');
     expect(res.written).toEqual(['data: hello\n\n']);
   });
 
   it('returns true when the write succeeds', () => {
     const res = makeRes();
-    expect(send(res as any, 'hello')).toBe(true);
+    const sse = initSSE(res as any);
+    expect(sse.send('hello')).toBe(true);
   });
 
   it('returns false and skips write when stream is ended', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.end();
-    expect(send(res as any, 'hello')).toBe(false);
+    expect(sse.send('hello')).toBe(false);
     expect(res.written).toHaveLength(0);
   });
 
   it('propagates false from res.write() as backpressure signal', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.write = jest.fn().mockReturnValue(false);
-    expect(send(res as any, 'hello')).toBe(false);
+    expect(sse.send('hello')).toBe(false);
   });
 });
 
 
-describe('sendJson', () => {
+describe('SSEContext.json', () => {
   it('serializes the object and writes data: <json>\\n\\n', () => {
     const res = makeRes();
-    sendJson(res as any, { ok: true });
+    const sse = initSSE(res as any);
+    sse.json({ ok: true });
     expect(res.written).toEqual(['data: {"ok":true}\n\n']);
   });
 
   it('returns false and skips write when stream is ended', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.end();
-    expect(sendJson(res as any, { ok: true })).toBe(false);
+    expect(sse.json({ ok: true })).toBe(false);
     expect(res.written).toHaveLength(0);
   });
 
   it('propagates false from res.write() as backpressure signal', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.write = jest.fn().mockReturnValue(false);
-    expect(sendJson(res as any, {})).toBe(false);
+    expect(sse.json({})).toBe(false);
   });
 });
 
 
-describe('sendEvent', () => {
+describe('SSEContext.event', () => {
   it('writes event: and data: lines', () => {
     const res = makeRes();
-    sendEvent(res as any, 'update', { count: 1 });
+    const sse = initSSE(res as any);
+    sse.event('update', { count: 1 });
     expect(res.written).toEqual(['event: update\n', 'data: {"count":1}\n\n']);
   });
 
   it('returns false and writes nothing when stream is ended', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.end();
-    expect(sendEvent(res as any, 'update', {})).toBe(false);
+    expect(sse.event('update', {})).toBe(false);
     expect(res.written).toHaveLength(0);
   });
 
   it('returns the result of the final write (backpressure)', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     let callCount = 0;
     res.write = jest.fn().mockImplementation(() => {
       callCount++;
-      return callCount < 2; // first write ok, second signals backpressure
+      return callCount < 2;
     });
-    expect(sendEvent(res as any, 'update', {})).toBe(false);
+    expect(sse.event('update', {})).toBe(false);
   });
 });
 
 
-describe('sseComment', () => {
+describe('SSEContext.comment', () => {
   it('writes : <comment>\\n\\n', () => {
     const res = makeRes();
-    sseComment(res as any, 'keep-alive');
+    const sse = initSSE(res as any);
+    sse.comment('keep-alive');
     expect(res.written).toEqual([': keep-alive\n\n']);
   });
 
   it('returns false when stream is ended', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.end();
-    expect(sseComment(res as any, 'ping')).toBe(false);
+    expect(sse.comment('ping')).toBe(false);
     expect(res.written).toHaveLength(0);
   });
 });
 
 
-describe('sseId', () => {
+describe('SSEContext.id', () => {
   it('writes id: <value>\\n\\n', () => {
     const res = makeRes();
-    sseId(res as any, 'abc-123');
+    const sse = initSSE(res as any);
+    sse.id('abc-123');
     expect(res.written).toEqual(['id: abc-123\n\n']);
   });
 
   it('returns false when stream is ended', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.end();
-    expect(sseId(res as any, 'x')).toBe(false);
+    expect(sse.id('x')).toBe(false);
     expect(res.written).toHaveLength(0);
   });
 });
 
 
-describe('sseRetry', () => {
+describe('SSEContext.retry', () => {
   it('writes retry: <ms>\\n\\n', () => {
     const res = makeRes();
-    sseRetry(res as any, 3000);
+    const sse = initSSE(res as any);
+    sse.retry(3000);
     expect(res.written).toEqual(['retry: 3000\n\n']);
   });
 
   it('returns false when stream is ended', () => {
     const res = makeRes();
+    const sse = initSSE(res as any);
     res.end();
-    expect(sseRetry(res as any, 1000)).toBe(false);
+    expect(sse.retry(1000)).toBe(false);
     expect(res.written).toHaveLength(0);
   });
 });
 
 
-describe('sseClose', () => {
+describe('SSEContext.close', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
   it('writes the default closing comment and calls end()', () => {
     const res = makeRes();
-    sseClose(res as any);
+    const sse = initSSE(res as any);
+    sse.close();
     expect(res.written).toContain(': Connection closed\n\n');
     expect(res.ended).toBe(true);
   });
 
   it('writes a custom comment when provided', () => {
     const res = makeRes();
-    sseClose(res as any, 'stream done');
+    const sse = initSSE(res as any);
+    sse.close('stream done');
     expect(res.written).toContain(': stream done\n\n');
     expect(res.ended).toBe(true);
+  });
+
+  it('clears the timeout', () => {
+    const res = makeRes();
+    const sse = initSSE(res as any, { timeout: 5000 });
+    sse.close();
+    const endCount = res.written.filter(w => w === undefined).length;
+    jest.advanceTimersByTime(5000);
+    // end() should not be called again by the timer
+    expect(res.ended).toBe(true);
+    expect(endCount).toBe(0);
   });
 });
 
 
-describe('sseEventError', () => {
-  it('sets the given status code', () => {
-    const res = makeRes();
-    sseEventError(res as any, 'error', 'Something went wrong', 503);
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('defaults to status 500', () => {
-    const res = makeRes();
-    sseEventError(res as any, 'error', 'oops');
-    expect(res.statusCode).toBe(500);
-  });
-
+describe('SSEContext.error', () => {
   it('writes the event name', () => {
     const res = makeRes();
-    sseEventError(res as any, 'auth_error', 'Unauthorized', 401);
+    const sse = initSSE(res as any);
+    sse.error('auth_error', 'Unauthorized', 401);
     expect(res.written.some(c => c.includes('event: auth_error'))).toBe(true);
   });
 
   it('writes the error message and code in the data payload', () => {
     const res = makeRes();
-    sseEventError(res as any, 'error', 'Not found', 404);
+    const sse = initSSE(res as any);
+    sse.error('error', 'Not found', 404);
     const dataLine = res.written.find(c => c.startsWith('data:'));
     expect(dataLine).toBeDefined();
     const payload = JSON.parse(dataLine!.replace('data: ', ''));
@@ -289,15 +301,26 @@ describe('sseEventError', () => {
 
   it('includes details when provided', () => {
     const res = makeRes();
-    sseEventError(res as any, 'error', 'Bad request', 400, 'field X is required');
+    const sse = initSSE(res as any);
+    sse.error('error', 'Bad request', 400, 'field X is required');
     const dataLine = res.written.find(c => c.startsWith('data:'));
     const payload = JSON.parse(dataLine!.replace('data: ', ''));
     expect(payload.details).toBe('field X is required');
   });
 
+  it('defaults to code 500', () => {
+    const res = makeRes();
+    const sse = initSSE(res as any);
+    sse.error('error', 'oops');
+    const dataLine = res.written.find(c => c.startsWith('data:'));
+    const payload = JSON.parse(dataLine!.replace('data: ', ''));
+    expect(payload.code).toBe(500);
+  });
+
   it('calls res.end()', () => {
     const res = makeRes();
-    sseEventError(res as any, 'error', 'oops');
+    const sse = initSSE(res as any);
+    sse.error('error', 'oops');
     expect(res.ended).toBe(true);
   });
 });
