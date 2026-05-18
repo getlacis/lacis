@@ -70,8 +70,12 @@ function createHttpError(options: {
 }
 
 function errorToJSON(error: HttpError) {
+  const message = error.expose
+    ? error.message
+    : DEFAULT_ERROR_MESSAGES[error.code] || "Internal Server Error";
+
   const result = {
-    error: error.message,
+    error: message,
     code: error.code,
   };
 

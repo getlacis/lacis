@@ -250,7 +250,7 @@ describe("netlifyAdapter handler", () => {
     const result = await handler(event(), {});
 
     expect(result.statusCode).toBe(500);
-    expect(JSON.parse(result.body)).toEqual({ error: "Internal server error" });
+    expect(JSON.parse(result.body)).toEqual({ error: "Internal Server Error", code: 500 });
   });
 
   it("respects status set via res.status()", async () => {
@@ -330,7 +330,7 @@ describe("netlifyAdapter handler", () => {
       "onError",
       expect.anything(),
       expect.anything(),
-      { error: expect.any(Error) }
+      { error: expect.objectContaining({ code: 500 }) }
     );
   });
 });

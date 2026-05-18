@@ -154,7 +154,7 @@ describe('bunAdapter — routing', () => {
     mockFindRoute.mockReturnValue(makeRoute(async () => { throw new Error('boom'); }));
     const res = await fetch(makeRequest('/'));
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: 'Internal Server Error' });
+    expect(await res.json()).toEqual({ error: 'Internal Server Error', code: 500 });
   });
 
   it('auto-ends the response when the handler returns without calling res.end()', async () => {
@@ -214,7 +214,7 @@ describe('bunAdapter — middleware', () => {
     mockFindRoute.mockReturnValue(makeRoute(async () => { throw new Error('boom'); }));
     const res = await fetch(makeRequest('/'));
     expect(res.status).toBe(500);
-    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything(), { error: expect.any(Error) });
+    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything(), { error: expect.objectContaining({ code: 500 }) });
   });
 
   it('does not send 500 fallback if onError already responded', async () => {

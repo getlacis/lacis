@@ -247,7 +247,7 @@ describe('vercelAdapter handler', () => {
       'onError',
       expect.anything(),
       expect.anything(),
-      { error: expect.any(Error) }
+      { error: expect.objectContaining({ code: 500 }) }
     );
   });
 });

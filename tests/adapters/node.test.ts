@@ -270,7 +270,7 @@ describe('nodeAdapter — request handling', () => {
     await ended;
 
     expect(res.statusCode).toBe(500);
-    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything(), { error: expect.any(Error) });
+    expect(mockRunMiddlewares).toHaveBeenCalledWith('onError', expect.anything(), expect.anything(), { error: expect.objectContaining({ code: 500 }) });
   });
 
   it('does not send 500 fallback if onError already responded', async () => {
