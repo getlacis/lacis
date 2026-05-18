@@ -34,14 +34,15 @@ All commands accept `--routes <dir>` to override the default `./routes` director
 ```
 my-app/
   routes/
-    +middleware.ts        # global middleware
-    index.ts              # GET /
+    +middleware.global.ts  # cascades to all routes
+    index.ts               # GET /
     users/
-      index.ts            # GET /users, POST /users
+      index.ts             # GET /users, POST /users
       [id]/
-        index.ts          # GET /users/:id
+        index.ts           # GET /users/:id
     api/
-      +middleware.ts      # middleware scoped to /api/*
+      +middleware.ts       # exact to /api — does NOT cascade
+      +middleware.global.ts  # cascades to /api/* and below
       items/
         index.ts
   server.ts
@@ -199,10 +200,14 @@ The spec is built from all `defineHandler` routes. Routes without `defineHandler
 
 ## Middleware
 
-Create a `+middleware.ts` file in any route directory. It applies to all routes at and below that path.
+There are two middleware file conventions with different scoping behaviors.
+
+**`+middleware.global.ts` — cascading**
+
+Applies to the current directory and all subdirectories.
 
 ```ts
-// routes/api/+middleware.ts
+// routes/api/+middleware.global.ts — runs for /api, /api/users, /api/users/:id, etc.
 import type { Request, Response } from 'lacis'
 
 export const beforeRequest = async (req: Request, res: Response) => {
@@ -221,6 +226,19 @@ export const onError = async (req: Request, res: Response, context: any) => {
 }
 ```
 
+**`+middleware.ts` — exact path only**
+
+Applies only to routes at that directory level. Does **not** cascade into subdirectories.
+
+```ts
+// routes/api/+middleware.ts — runs for /api only, NOT /api/users
+import type { Request, Response } from 'lacis'
+
+export const beforeRequest = async (req: Request, res: Response) => {
+  // ...
+}
+```
+
 Returning `false` from `beforeRequest` stops the request pipeline.
 
 **Global middleware via server config**
@@ -234,6 +252,26 @@ createServer(routesDir, {
   },
 })
 ```
+
+## Lifecycle hooks
+
+```ts
+createServer(routesDir, {
+  hooks: {
+    onNotFound: async (req, res) => {
+      res.status(404).json({ error: 'Not found', path: req.url })
+    },
+
+    onShutdown: async () => {
+      // close DB connections, flush logs, etc.
+    },
+  },
+})
+```
+
+`onNotFound` is called when no route matches. If it sends a response, the default `404` is skipped. If it returns without sending, the default `{ error: "Not Found", code: 404 }` is used.
+
+`onShutdown` is called during graceful shutdown (SIGINT / SIGTERM / SIGHUP), before the server closes.
 
 ## CORS
 
