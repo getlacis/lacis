@@ -347,6 +347,34 @@ export async function GET(req: Request, res: Response) {
 | `sse.close(comment?)` | Close the connection |
 | `sse.error(event, message, code?, details?)` | Send error event and close |
 
+**Bun: call `initSSE()` before any `await`**
+
+On Bun, the response type (streaming vs buffered) must be decided synchronously before the first `await`. Calling `initSSE()` after an `await` throws at runtime.
+
+```ts
+// ✗ throws on Bun
+export async function GET(req: Request, res: Response) {
+  const data = await fetchData()
+  const sse = res.initSSE()  // too late
+}
+
+// ✓ fetch data first, then init
+export async function GET(req: Request, res: Response) {
+  const data = await fetchData()
+  const sse = res.initSSE()  // works on Node/Netlify/Vercel but not Bun
+}
+
+// ✓ workaround: initSSE before any await
+export async function GET(req: Request, res: Response) {
+  const sse = res.initSSE()
+  const data = await fetchData()
+  sse.json(data)
+  sse.close()
+}
+```
+
+This is a constraint of Bun's HTTP model. Once the handler's first `await` resolves, response headers are committed and the streaming decision is final. Node.js, Vercel, and Netlify do not have this constraint.
+
 **Client**
 
 ```ts
