@@ -26,133 +26,133 @@ describe("defaultCacheKey", () => {
 })
 
 describe("createResponseCache", () => {
-  it("returns undefined (pass-through) on first request", () => {
+  it("returns undefined (pass-through) on first request", async () => {
     const mw = createResponseCache({ ttl: 60 })
-    const result = mw(makeReq(), makeRes())
+    const result = await mw(makeReq(), makeRes())
     expect(result).toBeUndefined()
   })
 
-  it("serves from cache on second identical request", () => {
+  it("serves from cache on second identical request", async () => {
     const mw = createResponseCache({ ttl: 60 })
     const req = makeReq()
 
     const res1 = makeRes()
-    mw(req, res1)
+    await mw(req, res1)
     res1.setHeader("Content-Type", "application/json")
     ;(res1 as any).statusCode = 200
     res1.end('{"ok":true}')
 
     const res2 = makeRes()
-    const result = mw(makeReq(), res2)
+    const result = await mw(makeReq(), res2)
     expect(result).toBe(false)
     expect(res2.end).toHaveBeenCalledWith('{"ok":true}')
   })
 
-  it("does not cache non-2xx responses", () => {
+  it("does not cache non-2xx responses", async () => {
     const mw = createResponseCache({ ttl: 60 })
     const req = makeReq()
 
     const res1 = makeRes()
-    mw(req, res1)
+    await mw(req, res1)
     ;(res1 as any).statusCode = 500
     res1.end("oops")
 
     const res2 = makeRes()
-    const result = mw(makeReq(), res2)
+    const result = await mw(makeReq(), res2)
     expect(result).toBeUndefined()
   })
 
-  it("does not cache responses with Set-Cookie", () => {
+  it("does not cache responses with Set-Cookie", async () => {
     const mw = createResponseCache({ ttl: 60 })
     const req = makeReq()
 
     const res1 = makeRes()
-    mw(req, res1)
+    await mw(req, res1)
     res1.setHeader("Set-Cookie", "session=abc")
     ;(res1 as any).statusCode = 200
     res1.end("data")
 
     const res2 = makeRes()
-    const result = mw(makeReq(), res2)
+    const result = await mw(makeReq(), res2)
     expect(result).toBeUndefined()
   })
 
-  it("does not cache SSE responses", () => {
+  it("does not cache SSE responses", async () => {
     const mw = createResponseCache({ ttl: 60 })
     const req = makeReq()
 
     const res1 = makeRes()
-    mw(req, res1)
+    await mw(req, res1)
     res1.setHeader("Content-Type", "text/event-stream")
     res1.end(undefined)
 
     const res2 = makeRes()
-    expect(mw(makeReq(), res2)).toBeUndefined()
+    expect(await mw(makeReq(), res2)).toBeUndefined()
   })
 
-  it("skips non-matching methods", () => {
+  it("skips non-matching methods", async () => {
     const mw = createResponseCache({ ttl: 60, methods: ["GET"] })
     const req = makeReq("POST")
     const res = makeRes()
-    expect(mw(req, res)).toBeUndefined()
+    expect(await mw(req, res)).toBeUndefined()
     res.end("body")
 
-    expect(mw(makeReq("POST"), makeRes())).toBeUndefined()
+    expect(await mw(makeReq("POST"), makeRes())).toBeUndefined()
   })
 
-  it("excludes paths in the exclude list", () => {
+  it("excludes paths in the exclude list", async () => {
     const mw = createResponseCache({ ttl: 60, exclude: "/api/auth" })
     const req = makeReq("GET", "/api/auth/login")
     const res = makeRes()
-    mw(req, res)
+    await mw(req, res)
     res.end("secret")
 
-    expect(mw(makeReq("GET", "/api/auth/login"), makeRes())).toBeUndefined()
+    expect(await mw(makeReq("GET", "/api/auth/login"), makeRes())).toBeUndefined()
   })
 
-  it("respects match predicate", () => {
+  it("respects match predicate", async () => {
     const mw = createResponseCache({ ttl: 60, match: (req) => req.url === "/cacheable" })
     const req = makeReq("GET", "/not-cacheable")
     const res = makeRes()
-    mw(req, res)
+    await mw(req, res)
     res.end("data")
 
-    expect(mw(makeReq("GET", "/not-cacheable"), makeRes())).toBeUndefined()
+    expect(await mw(makeReq("GET", "/not-cacheable"), makeRes())).toBeUndefined()
   })
 
-  it("differentiates cache keys by query string by default", () => {
+  it("differentiates cache keys by query string by default", async () => {
     const mw = createResponseCache({ ttl: 60 })
 
     const res1 = makeRes()
-    mw(makeReq("GET", "/search?q=foo"), res1)
+    await mw(makeReq("GET", "/search?q=foo"), res1)
     res1.end("foo result")
 
     const res2 = makeRes()
-    mw(makeReq("GET", "/search?q=bar"), res2)
+    await mw(makeReq("GET", "/search?q=bar"), res2)
     res2.end("bar result")
 
     const res3 = makeRes()
-    expect(mw(makeReq("GET", "/search?q=foo"), res3)).toBe(false)
+    expect(await mw(makeReq("GET", "/search?q=foo"), res3)).toBe(false)
     expect(res3.end).toHaveBeenCalledWith("foo result")
   })
 
-  it("expires entries after ttl", () => {
+  it("expires entries after ttl", async () => {
     jest.useFakeTimers()
     const mw = createResponseCache({ ttl: 10 })
     const req = makeReq()
 
     const res1 = makeRes()
-    mw(req, res1)
+    await mw(req, res1)
     res1.end("fresh")
 
     jest.advanceTimersByTime(11_000)
 
     const res2 = makeRes()
-    expect(mw(makeReq(), res2)).toBeUndefined()
+    expect(await mw(makeReq(), res2)).toBeUndefined()
     jest.useRealTimers()
   })
 
-  it("uses a custom shouldCache predicate", () => {
+  it("uses a custom shouldCache predicate", async () => {
     const mw = createResponseCache({
       ttl: 60,
       shouldCache: (_req, res) => res.statusCode === 200,
@@ -160,11 +160,11 @@ describe("createResponseCache", () => {
     const req = makeReq()
 
     const res1 = makeRes()
-    mw(req, res1)
+    await mw(req, res1)
     ;(res1 as any).statusCode = 201
     res1.end("created")
 
-    expect(mw(makeReq(), makeRes())).toBeUndefined()
+    expect(await mw(makeReq(), makeRes())).toBeUndefined()
   })
 })
 

@@ -10,7 +10,12 @@ interface CacheEntry {
   expiresAt: number
 }
 
-function createStore(maxSize: number) {
+interface CacheStore {
+  get(key: string): CacheEntry | undefined | Promise<CacheEntry | undefined>
+  set(key: string, entry: CacheEntry): void | Promise<void>
+}
+
+function createStore(maxSize: number): CacheStore {
   const map = new Map<string, CacheEntry>()
 
   function get(key: string): CacheEntry | undefined {
@@ -103,6 +108,7 @@ export interface ResponseCacheOptions {
   match?: (req: Request) => boolean
   exclude?: string | string[]
   shouldCache?: (req: Request, res: Response) => boolean
+  store?: CacheStore
 }
 
 export function createResponseCache(options: ResponseCacheOptions): MiddlewareCallback {
@@ -114,13 +120,14 @@ export function createResponseCache(options: ResponseCacheOptions): MiddlewareCa
     match,
     exclude,
     shouldCache = (_req, res) => res.statusCode >= 200 && res.statusCode < 300,
+    store: customStore,
   } = options
 
   const methodSet = new Set(methods.map((m) => m.toUpperCase()))
   const excludeList = exclude ? (Array.isArray(exclude) ? exclude : [exclude]) : []
-  const store = createStore(maxSize)
+  const store = customStore ?? createStore(maxSize)
 
-  return (req, res) => {
+  return async (req, res) => {
     if (!methodSet.has((req.method ?? "GET").toUpperCase())) return
 
     const url = req.url ?? "/"
@@ -130,7 +137,7 @@ export function createResponseCache(options: ResponseCacheOptions): MiddlewareCa
     if (match && !match(req)) return
 
     const key = keyGenerator(req)
-    const cached = store.get(key)
+    const cached = await store.get(key)
 
     if (cached) {
       replayEntry(res, cached)
@@ -139,7 +146,7 @@ export function createResponseCache(options: ResponseCacheOptions): MiddlewareCa
 
     interceptResponse(res, (partial) => {
       if (shouldCache(req, res)) {
-        store.set(key, { ...partial, expiresAt: Date.now() + ttl * 1000 })
+        Promise.resolve(store.set(key, { ...partial, expiresAt: Date.now() + ttl * 1000 })).catch(() => {})
       }
     })
   }
@@ -149,18 +156,19 @@ export interface WithCacheOptions {
   ttl: number
   maxSize?: number
   key?: (req: Request) => string
+  store?: CacheStore
 }
 
 export function withCache(
   options: WithCacheOptions,
   handler: (req: Request, res: Response) => void | Promise<void>,
 ): (req: Request, res: Response) => Promise<void> {
-  const { ttl, maxSize = CACHE_MAX_DEFAULT, key: keyFn } = options
-  const store = createStore(maxSize)
+  const { ttl, maxSize = CACHE_MAX_DEFAULT, key: keyFn, store: customStore } = options
+  const store = customStore ?? createStore(maxSize)
 
   return async (req, res) => {
     const key = keyFn ? keyFn(req) : defaultCacheKey(req)
-    const cached = store.get(key)
+    const cached = await store.get(key)
 
     if (cached) {
       replayEntry(res, cached)
@@ -169,7 +177,7 @@ export function withCache(
 
     interceptResponse(res, (partial) => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        store.set(key, { ...partial, expiresAt: Date.now() + ttl * 1000 })
+        Promise.resolve(store.set(key, { ...partial, expiresAt: Date.now() + ttl * 1000 })).catch(() => {})
       }
     })
 
@@ -178,4 +186,4 @@ export function withCache(
 }
 
 export { createStore, interceptResponse, replayEntry }
-export type { CacheEntry, Store }
+export type { CacheEntry, CacheStore, Store }

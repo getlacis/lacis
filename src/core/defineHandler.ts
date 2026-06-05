@@ -99,14 +99,14 @@ export function defineHandler<
   const wrapped = async (req: Request, res: Response): Promise<void> => {
     if (store && config.cache) {
       const key = config.cache.key ? config.cache.key(req) : defaultCacheKey(req)
-      const cached = store.get(key)
+      const cached = await store.get(key)
       if (cached) {
         replayEntry(res, cached)
         return
       }
       interceptResponse(res, (partial) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          store.set(key, { ...partial, expiresAt: Date.now() + config.cache!.ttl * 1000 })
+          Promise.resolve(store.set(key, { ...partial, expiresAt: Date.now() + config.cache!.ttl * 1000 })).catch(() => {})
         }
       })
     }

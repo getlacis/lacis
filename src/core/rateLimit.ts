@@ -1,16 +1,41 @@
 import { createRateLimitError, sendError } from "@/core/errors";
 import type { MiddlewareCallback, Request } from "@/types";
 
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+interface RateLimitStore {
+  get(key: string): RateLimitEntry | undefined | Promise<RateLimitEntry | undefined>;
+  set(key: string, entry: RateLimitEntry): void | Promise<void>;
+  delete(key: string): void | Promise<void>;
+}
+
 interface RateLimitOptions {
   windowMs?: number;
   max?: number;
   message?: string;
   keyGenerator?: (req: Request) => string;
+  store?: RateLimitStore;
 }
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
+function createInMemoryRateLimitStore(windowMs: number): RateLimitStore {
+  const map = new Map<string, RateLimitEntry>();
+
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of map) {
+      if (now >= entry.resetAt) map.delete(key);
+    }
+  }, windowMs);
+  sweep.unref();
+
+  return {
+    get: (key) => map.get(key),
+    set: (key, entry) => { map.set(key, entry) },
+    delete: (key) => { map.delete(key) },
+  };
 }
 
 function createRateLimit(options: RateLimitOptions = {}): MiddlewareCallback {
@@ -28,27 +53,19 @@ function createRateLimit(options: RateLimitOptions = {}): MiddlewareCallback {
       );
     });
 
-  const store = new Map<string, RateLimitEntry>();
+  const store = options.store ?? createInMemoryRateLimitStore(windowMs);
 
-  const sweep = setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of store) {
-      if (now >= entry.resetAt) store.delete(key);
-    }
-  }, windowMs);
-  sweep.unref();
-
-  return (req, res) => {
+  return async (req, res) => {
     const key = keyGenerator(req);
     const now = Date.now();
 
-    let entry = store.get(key);
+    let entry = await store.get(key);
     if (!entry || now >= entry.resetAt) {
       entry = { count: 0, resetAt: now + windowMs };
-      store.set(key, entry);
     }
 
     entry.count++;
+    await store.set(key, entry);
 
     const remaining = Math.max(0, max - entry.count);
     const resetSecs = Math.ceil(entry.resetAt / 1000);
@@ -68,5 +85,5 @@ function createRateLimit(options: RateLimitOptions = {}): MiddlewareCallback {
   };
 }
 
-export { createRateLimit };
-export type { RateLimitOptions };
+export { createRateLimit, createInMemoryRateLimitStore };
+export type { RateLimitOptions, RateLimitEntry, RateLimitStore };
