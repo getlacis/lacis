@@ -59,6 +59,8 @@ interface Response extends ServerResponse {
   send(data: any): void;
   status(code: number): Response;
   initSSE(options?: SSEOptions): SSEContext;
+  stream(body: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>): Promise<void>;
+  ndjson(iter: AsyncIterable<unknown>): Promise<void>;
 }
 
 export type { Request, Response, UploadedFile, CookieOptions, RequestCookies, ResponseCookies };

@@ -73,6 +73,7 @@ class _BunResponseBase {
   _body: any = null;
   _headers: string[] | null = null;
   _sseReadable: ReadableStream<Uint8Array> | null = null;
+  _streamBody: ReadableStream<Uint8Array> | null = null;
   private _sseWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private _sseWindowClosed = false;
   private _listeners: ((...a: any[]) => void)[] | null = null;
@@ -162,10 +163,41 @@ class _BunResponseBase {
 }
 
 class BunResponse extends withResponseMethods(_BunResponseBase) {
-  // Override initSSE to set up a TransformStream before calling writeHead
   initSSE(options?: SSEOptions) {
     this._initSseStream();
     return super.initSSE(options);
+  }
+
+  stream(body: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>): Promise<void> {
+    this.setHeader('Cache-Control', 'no-cache')
+    this.setHeader('X-Accel-Buffering', 'no')
+    if (body instanceof ReadableStream) {
+      this._streamBody = body as ReadableStream<Uint8Array>
+    } else {
+      this._streamBody = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          for await (const chunk of body as AsyncIterable<Uint8Array>) controller.enqueue(chunk)
+          controller.close()
+        },
+      })
+    }
+    this.headersSent = true
+    return Promise.resolve()
+  }
+
+  ndjson(iter: AsyncIterable<unknown>): Promise<void> {
+    const encoder = new TextEncoder()
+    this.setHeader('Content-Type', 'application/x-ndjson')
+    this.setHeader('Cache-Control', 'no-cache')
+    this.setHeader('X-Accel-Buffering', 'no')
+    this._streamBody = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        for await (const item of iter) controller.enqueue(encoder.encode(JSON.stringify(item) + '\n'))
+        controller.close()
+      },
+    })
+    this.headersSent = true
+    return Promise.resolve()
   }
 }
 
@@ -346,7 +378,7 @@ export const bunAdapter: Adapter = {
 };
 
 function buildResponse(res: _BunResponseBase, body?: ReadableStream<Uint8Array> | null): Response {
-  const responseBody = body ?? res._body;
+  const responseBody = body ?? res._streamBody ?? res._body;
   if (!res._headers) return new Response(responseBody, { status: res.statusCode });
   const headers = new Headers();
   for (let i = 0; i < res._headers.length; i += 2) {

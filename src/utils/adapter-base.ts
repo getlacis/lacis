@@ -290,6 +290,39 @@ export function withResponseMethods<T extends ResponseMixinBase>(Base: T) {
     initSSE(options?: SSEOptions) {
       return initSSE(this as any, options);
     }
+
+    async stream(body: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>): Promise<void> {
+      this.setHeader('Cache-Control', 'no-cache')
+      this.setHeader('X-Accel-Buffering', 'no')
+      if (body instanceof ReadableStream) {
+        const reader = (body as ReadableStream<Uint8Array>).getReader()
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            this.write(value)
+          }
+        } finally {
+          this.end()
+        }
+      } else {
+        for await (const chunk of body as AsyncIterable<Uint8Array>) {
+          this.write(chunk)
+        }
+        this.end()
+      }
+    }
+
+    async ndjson(iter: AsyncIterable<unknown>): Promise<void> {
+      const encoder = new TextEncoder()
+      this.setHeader('Content-Type', 'application/x-ndjson')
+      this.setHeader('Cache-Control', 'no-cache')
+      this.setHeader('X-Accel-Buffering', 'no')
+      for await (const item of iter) {
+        this.write(encoder.encode(JSON.stringify(item) + '\n'))
+      }
+      this.end()
+    }
   };
 }
 
@@ -355,4 +388,31 @@ export function applyResponseMethods(res: any): void {
     flushCookies(cookieJar, this);
     return origEnd(...args);
   };
+
+  // Buffered streaming for serverless — response is sent as a single body once the stream ends
+  res.stream = async function(this: any, body: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>) {
+    const chunks: Uint8Array[] = []
+    if (body instanceof ReadableStream) {
+      const reader = (body as ReadableStream<Uint8Array>).getReader()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+      }
+    } else {
+      for await (const chunk of body as AsyncIterable<Uint8Array>) chunks.push(chunk)
+    }
+    const total = chunks.reduce((acc, c) => acc + c.length, 0)
+    const buf = new Uint8Array(total)
+    let offset = 0
+    for (const c of chunks) { buf.set(c, offset); offset += c.length }
+    this.end(Buffer.from(buf))
+  }
+
+  res.ndjson = async function(this: any, iter: AsyncIterable<unknown>) {
+    this.setHeader('Content-Type', 'application/x-ndjson')
+    const parts: string[] = []
+    for await (const item of iter) parts.push(JSON.stringify(item) + '\n')
+    this.end(parts.join(''))
+  }
 }

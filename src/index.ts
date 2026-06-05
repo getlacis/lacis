@@ -7,6 +7,7 @@ export * from "@/core/middleware";
 export * from "@/core/errors";
 export * from "@/core/rateLimit";
 export * from "@/core/responseCache";
+export * from "@/core/streaming";
 export * from "@/core/cors";
 export { initSSE } from "@/sse/server";
 export * from "@/sse/client";
