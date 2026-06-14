@@ -1,6 +1,6 @@
 {
   "name": "lacis",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Zero-dependency TypeScript web framework",
   "license": "MIT",
   "repository": {
