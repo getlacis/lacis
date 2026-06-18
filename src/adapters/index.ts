@@ -3,14 +3,16 @@ import { nodeAdapter } from './node';
 import { vercelAdapter } from './vercel';
 import { netlifyAdapter } from './netlify';
 import { bunAdapter } from './bun';
+import { cloudflareAdapter } from './cloudflare';
 
-export { nodeAdapter, vercelAdapter, netlifyAdapter, bunAdapter };
+export { nodeAdapter, vercelAdapter, netlifyAdapter, bunAdapter, cloudflareAdapter };
 
 const adapters: Record<string, Adapter> = {
   node: nodeAdapter,
   vercel: vercelAdapter,
   netlify: netlifyAdapter,
   bun: bunAdapter,
+  cloudflare: cloudflareAdapter,
 };
 
 export function getAdapter(platform: string = 'node'): Adapter {
