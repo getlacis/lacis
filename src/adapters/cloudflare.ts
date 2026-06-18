@@ -21,6 +21,7 @@ class _CFRequestBase {
   connection: { remoteAddress: string }
   private _req: globalThis.Request
 
+  cf: unknown
   constructor(req: globalThis.Request, url: { pathname: string; search: string }, env: unknown, ctx: unknown) {
     this._req = req
     this.url = url.pathname + url.search
@@ -28,6 +29,7 @@ class _CFRequestBase {
     this.headers = req.headers as unknown as LacisHeaders
     this.env = env
     this.ctx = ctx
+    this.cf = (req as any).cf
     this.connection = { remoteAddress: '' }
   }
 

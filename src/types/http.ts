@@ -40,6 +40,7 @@ interface Request extends IncomingMessage {
   cookies: RequestCookies;
   env?: unknown;
   ctx?: unknown;
+  cf?: unknown;
   getHeader(name: string): string | undefined;
   createSSEClient(
     options?: SSEClientOptions,

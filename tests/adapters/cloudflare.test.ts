@@ -178,6 +178,20 @@ describe('cloudflareAdapter — env & ctx', () => {
     await handler.fetch(makeRequest('/'), mockEnv, mockCtx)
     expect(capturedCtx).toBe(mockCtx)
   })
+
+  it('exposes cf on req', async () => {
+    const handler = getHandler()
+    let capturedCf: unknown
+    const cfRequest = Object.assign(makeRequest('/'), { cf: { country: 'FR', colo: 'CDG' } })
+    mockFindRoute.mockReturnValue(
+      makeRoute(async (req: LacisRequest, res: LacisResponse) => {
+        capturedCf = (req as any).cf
+        res.status(200).json({})
+      }),
+    )
+    await handler.fetch(cfRequest, mockEnv, mockCtx)
+    expect(capturedCf).toEqual({ country: 'FR', colo: 'CDG' })
+  })
 })
 
 describe('cloudflareAdapter — middleware', () => {
