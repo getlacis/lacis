@@ -4,13 +4,15 @@ import { join } from 'path'
 import { watchRoutes } from './watch.js'
 import { generateManifest } from './build.js'
 
-function detectPlatform(cwd: string): 'netlify' | 'vercel' | 'node' {
+function detectPlatform(cwd: string): 'netlify' | 'vercel' | 'node' | 'cloudflare' {
+  if (existsSync(join(cwd, 'wrangler.toml'))) return 'cloudflare'
   if (existsSync(join(cwd, 'netlify.toml'))) return 'netlify'
   if (existsSync(join(cwd, 'vercel.json'))) return 'vercel'
 
   try {
     const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'))
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+    if (allDeps['wrangler']) return 'cloudflare'
     if (allDeps['@netlify/functions'] || allDeps['netlify-cli']) return 'netlify'
     if (allDeps['vercel'] || allDeps['@vercel/node']) return 'vercel'
   } catch {}
@@ -50,7 +52,9 @@ export async function dev(routesDir: string): Promise<void> {
   }
 
   const [cmd, args] =
-    platform === 'netlify' ? ['netlify', ['dev']] : ['vercel', ['dev']]
+    platform === 'netlify' ? ['netlify', ['dev']] :
+    platform === 'cloudflare' ? ['wrangler', ['dev']] :
+    ['vercel', ['dev']]
 
   const child = spawn(cmd, args, { stdio: 'inherit', shell: true, cwd })
 
