@@ -8,9 +8,15 @@ export interface OpenApiInfo {
   description?: string
 }
 
+export interface OpenApiServer {
+  url: string
+  description?: string
+}
+
 export interface OpenApiConfig {
   path?: string
   info: OpenApiInfo
+  servers?: OpenApiServer[]
 }
 
 async function schemaToJsonSchema(schema: any): Promise<Record<string, any> | null> {
@@ -40,11 +46,42 @@ function toOpenApiPath(path: string): string {
   return path.replace(/:(\w+)\??/g, "{$1}")
 }
 
+const STATUS_DESCRIPTIONS: Record<number, string> = {
+  200: "OK",
+  201: "Created",
+  204: "No Content",
+  400: "Bad Request",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "Not Found",
+  409: "Conflict",
+  422: "Unprocessable Entity",
+  500: "Internal Server Error",
+}
+
+function statusDescription(code: number): string {
+  return STATUS_DESCRIPTIONS[code] ?? "Response"
+}
+
+function generateOperationId(method: string, openApiPath: string): string {
+  const segments = openApiPath.split("/").filter(Boolean)
+  const staticSegs = segments.filter((s) => !s.startsWith("{"))
+  const paramSegs = segments.filter((s) => s.startsWith("{")).map((s) => s.slice(1, -1))
+  const base = method.toLowerCase() + staticSegs.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join("")
+  const byPart =
+    paramSegs.length > 0
+      ? "By" + paramSegs.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join("And")
+      : ""
+  return base + byPart
+}
+
 async function buildOperation(
   method: string,
+  openApiPath: string,
   config: DefineHandlerConfig<any, any, any>,
 ): Promise<Record<string, any>> {
   const op: Record<string, any> = {
+    operationId: config.meta?.operationId ?? generateOperationId(method, openApiPath),
     responses: { "200": { description: "Success" } },
   }
 
@@ -86,6 +123,17 @@ async function buildOperation(
     }
   }
 
+  if (config.responses) {
+    const responsesObj: Record<string, any> = {}
+    for (const [status, schema] of Object.entries(config.responses)) {
+      const jsonSchema = await schemaToJsonSchema(schema as any)
+      responsesObj[status] = jsonSchema
+        ? { description: statusDescription(Number(status)), content: { "application/json": { schema: jsonSchema } } }
+        : { description: statusDescription(Number(status)) }
+    }
+    op.responses = responsesObj
+  }
+
   return op
 }
 
@@ -99,9 +147,11 @@ export async function buildOpenApiDoc(config: OpenApiConfig): Promise<Record<str
     if (!paths[openApiPath]) paths[openApiPath] = {}
 
     paths[openApiPath][method.toLowerCase()] = defineConfig
-      ? await buildOperation(method, defineConfig)
-      : { responses: { "200": { description: "Success" } } }
+      ? await buildOperation(method, openApiPath, defineConfig)
+      : { operationId: generateOperationId(method, openApiPath), responses: { "200": { description: "Success" } } }
   }
 
-  return { openapi: "3.1.0", info: config.info, paths }
+  const doc: Record<string, any> = { openapi: "3.1.0", info: config.info, paths }
+  if (config.servers?.length) doc.servers = config.servers
+  return doc
 }

@@ -45,6 +45,7 @@ export interface HandlerMeta {
   description?: string
   tags?: string[]
   deprecated?: boolean
+  operationId?: string
 }
 
 export interface HandlerCacheOptions {
@@ -61,6 +62,7 @@ export interface DefineHandlerConfig<
   params?: TParams
   query?: TQuery
   body?: TBody
+  responses?: Record<number, StandardSchema>
   meta?: HandlerMeta
   cache?: HandlerCacheOptions
   handler: (
