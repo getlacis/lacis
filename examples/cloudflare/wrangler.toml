@@ -1,0 +1,7 @@
+name = "lacis-example"
+main = "worker.ts"
+compatibility_date = "2025-06-18"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
