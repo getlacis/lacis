@@ -173,6 +173,47 @@ describe("buildOpenApiDoc", () => {
       expect(op.requestBody.content["application/json"].schema).toBeDefined()
     })
 
+    it("hoists description and example from schema to parameter level", async () => {
+      router.addRoute(
+        "GET",
+        "/users/[id]",
+        defineHandler({
+          params: arktypeSchema({
+            type: "object",
+            properties: { id: { type: "string", description: "The user ID", example: "user_123" } },
+          }),
+          query: arktypeSchema({
+            type: "object",
+            properties: { page: { type: "number", description: "Page number", example: 1 } },
+          }),
+          handler: async (_req, res) => res.json({}),
+        }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      const params = doc.paths["/users/{id}"].get.parameters
+      const idParam = params.find((p: any) => p.name === "id")
+      const pageParam = params.find((p: any) => p.name === "page")
+      expect(idParam.description).toBe("The user ID")
+      expect(idParam.example).toBe("user_123")
+      expect(pageParam.description).toBe("Page number")
+      expect(pageParam.example).toBe(1)
+    })
+
+    it("omits description and example when not present in schema", async () => {
+      router.addRoute(
+        "GET",
+        "/users/[id]",
+        defineHandler({
+          params: arktypeSchema({ type: "object", properties: { id: { type: "string" } } }),
+          handler: async (_req, res) => res.json({}),
+        }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      const idParam = doc.paths["/users/{id}"].get.parameters.find((p: any) => p.name === "id")
+      expect(idParam.description).toBeUndefined()
+      expect(idParam.example).toBeUndefined()
+    })
+
     it("omits parameters gracefully when converter is not available", async () => {
       router.addRoute(
         "GET",

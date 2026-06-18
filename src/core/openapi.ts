@@ -75,6 +75,13 @@ function generateOperationId(method: string, openApiPath: string): string {
   return base + byPart
 }
 
+function buildParameter(name: string, location: "path" | "query", required: boolean, propSchema: any): Record<string, any> {
+  const param: Record<string, any> = { name, in: location, required, schema: propSchema }
+  if (propSchema.description) param.description = propSchema.description
+  if (propSchema.example !== undefined) param.example = propSchema.example
+  return param
+}
+
 async function buildOperation(
   method: string,
   openApiPath: string,
@@ -95,8 +102,8 @@ async function buildOperation(
   if (config.params) {
     const jsonSchema = await schemaToJsonSchema(config.params)
     if (jsonSchema?.properties) {
-      for (const [name, propSchema] of Object.entries(jsonSchema.properties)) {
-        parameters.push({ name, in: "path", required: true, schema: propSchema })
+      for (const [name, propSchema] of Object.entries<any>(jsonSchema.properties)) {
+        parameters.push(buildParameter(name, "path", true, propSchema))
       }
     }
   }
@@ -105,8 +112,8 @@ async function buildOperation(
     const jsonSchema = await schemaToJsonSchema(config.query)
     if (jsonSchema?.properties) {
       const required: string[] = jsonSchema.required ?? []
-      for (const [name, propSchema] of Object.entries(jsonSchema.properties)) {
-        parameters.push({ name, in: "query", required: required.includes(name), schema: propSchema })
+      for (const [name, propSchema] of Object.entries<any>(jsonSchema.properties)) {
+        parameters.push(buildParameter(name, "query", required.includes(name), propSchema))
       }
     }
   }
