@@ -2,17 +2,21 @@
 
 Zero-dependency TypeScript web framework with file-based routing.
 
+> **file-based, multi-runtime, zero-dependency — and a *true-by-construction* OpenAPI contract: validated at the input, typed at the output, generatable as a client.**
+
 **Documentation:** [lacis.lycia.dev](https://lacis.lycia.dev)
 
 ## Features
 
 - **File-based routing** — routes generated automatically from your `routes/` folder
 - **Standard Schema validation** — validate params, query, and body with Zod, Valibot, or ArkType via `defineHandler`
+- **Typed responses** — declare `responses` once: it types the handler *and* feeds the OpenAPI (single source of truth)
 - **OpenAPI generation** — spec built automatically from your `defineHandler` routes
-- **Middleware** — global, path-scoped, and route-scoped via `+middleware.ts` files
+- **Middleware** — global, path-scoped (`+middleware.ts`), and per-route/per-method (`use:`)
 - **CORS & rate limiting** — built in, zero dependencies
 - **SSE** — server-sent events with a matching client helper
-- **Multi-platform** — Node.js, Bun, Vercel, Netlify via adapters
+- **Multi-platform** — Node.js, Bun, Vercel, Netlify, Cloudflare Workers via adapters
+- **Typed request context** — `req.locals` (app data) and `req.platform` (runtime bindings), both augmentable
 - **Cookies** — first-class `req.cookies` / `res.cookies` API
 
 ## Installation
@@ -100,9 +104,11 @@ export async function GET(req: Request, res: Response) {
 | `req.cookies.get(name)` | Read a cookie |
 | `req.cookies.all()` | All cookies as an object |
 | `req.json<T>()` | Parse JSON body |
-| `req.form<T>()` | Parse form body |
+| `req.form<T>()` | Parse form body (`multipart/form-data` and `application/x-www-form-urlencoded`) |
 | `req.body()` | Raw body as `Buffer` |
 | `req.getHeader(name)` | Read a request header |
+| `req.locals` | Per-request app context, set by middleware (typed — see below) |
+| `req.platform` | Runtime bindings (empty except on Cloudflare — see below) |
 
 **Response**
 
@@ -178,6 +184,86 @@ export const GET = defineHandler({
 })
 ```
 
+### Typed responses (opt-in)
+
+Declare `responses` and `res` becomes type-safe: `res.status(code).json(data)` only
+accepts the schema declared for that status code. This is a single source of truth —
+the same `responses` types the handler **and** feeds the OpenAPI spec.
+
+```ts
+export const GET = defineHandler({
+  responses: {
+    200: z.object({ id: z.string(), name: z.string() }),
+    404: z.object({ error: z.string() }),
+  },
+  handler: async (req, res) => {
+    res.status(200).json({ id: '1', name: 'Ada' })  // ✓ matches the 200 schema
+    res.status(404).json({ id: 1 })                 // ✗ type error — 404 wants { error }
+  },
+})
+```
+
+- **Opt-in & non-breaking**: without `responses`, `res` stays the regular `Response`.
+- **Escape hatch**: `res.raw` is the untyped `Response` for streaming / edge cases.
+- **Dev-only runtime check**: in non-production (`NODE_ENV !== 'production'`), a returned
+  body that violates its declared schema fails loudly. Zero validation in production (perf).
+
+### Per-route middleware (`use:`)
+
+`use:` runs middleware for a single route handler — and because each HTTP method is its
+own `defineHandler`, it scopes **by method** (impossible with file-based `+middleware`).
+It runs after the path `+middleware`, before the handler. Returning `false` (or sending
+the response) stops the chain.
+
+```ts
+import { defineHandler } from 'lacis'
+import { auth, rateLimit } from '../middleware'
+
+// GET is public, POST requires auth — same path, different methods
+export const GET = defineHandler({ handler: async (req, res) => res.json({ list: [] }) })
+
+export const POST = defineHandler({
+  use: [rateLimit, auth],
+  handler: async (req, res) => res.status(201).json({ ok: true }),
+})
+```
+
+## Request context: `req.locals` and `req.platform`
+
+Both use **declaration merging** — augment them once and they are typed everywhere.
+
+**`req.locals`** — pass application data from middleware to handlers (instead of abusing
+headers). Global by design: every route "sees" the shape (a deliberate trade-off for
+file-based routing).
+
+```ts
+declare module 'lacis' {
+  interface Locals {
+    user: { id: string; role: string }
+  }
+}
+
+// in a middleware
+req.locals.user = await authenticate(req)
+// in a handler
+res.json({ id: req.locals.user.id })
+```
+
+**`req.platform`** — runtime-specific bindings. Empty by default (a Node project exposes
+nothing), populated with `{ env, ctx, cf }` on Cloudflare Workers. The Cloudflare scaffold
+generates an `env.d.ts` that augments it, so you access `req.platform.env` without `as any`.
+
+```ts
+// env.d.ts (Cloudflare)
+declare module 'lacis' {
+  interface PlatformContext {
+    env: Env
+    ctx: ExecutionContext
+    cf: IncomingRequestCfProperties
+  }
+}
+```
+
 ## OpenAPI
 
 Add `openapi` to your server config to expose a generated spec at runtime:
@@ -187,6 +273,7 @@ createServer(routesDir, {
   openapi: {
     path: '/openapi.json',  // default
     info: { title: 'My API', version: '1.0.0' },
+    servers: [{ url: 'https://api.example.com', description: 'production' }],
   },
 })
 ```
@@ -200,9 +287,30 @@ The spec is built from all `defineHandler` routes. Routes without `defineHandler
 | Valibot | `@valibot/to-json-schema` |
 | ArkType | none (native `.toJsonSchema()`) |
 
+### Typed client from your spec
+
+Lacis ships **no** client codegen — mature tools do it better, in many languages, and
+writing one would betray the zero-dependency ethos. Point [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch/)
+at your generated spec for an end-to-end typed API client with zero maintained code:
+
+```bash
+npx openapi-typescript http://localhost:3000/openapi.json -o ./src/api.d.ts
+```
+
+```ts
+import createClient from 'openapi-fetch'
+import type { paths } from './api'
+
+const api = createClient<paths>({ baseUrl: 'http://localhost:3000' })
+
+// fully typed path, params, body and response
+const { data, error } = await api.GET('/users/{id}', { params: { path: { id: '1' } } })
+```
+
 ## Middleware
 
-There are two middleware file conventions with different scoping behaviors.
+There are two file-based middleware conventions (below) for cross-cutting concerns scoped
+by **path**, plus per-route/per-method `use:` in `defineHandler` (see [Per-route middleware](#per-route-middleware-use)) for fine-grained scoping. They coexist.
 
 **`+middleware.global.ts` — cascading**
 
@@ -349,24 +457,20 @@ export async function GET(req: Request, res: Response) {
 | `sse.close(comment?)` | Close the connection |
 | `sse.error(event, message, code?, details?)` | Send error event and close |
 
-**Bun: call `initSSE()` before any `await`**
+**Bun & Cloudflare: call `initSSE()` before any `await`**
 
-On Bun, the response type (streaming vs buffered) must be decided synchronously before the first `await`. Calling `initSSE()` after an `await` throws at runtime.
+On the runtime-Web adapters (**Bun** and **Cloudflare Workers**), the response type
+(streaming vs buffered) must be decided synchronously before the first `await`. Calling
+`initSSE()` after an `await` throws at runtime.
 
 ```ts
-// ✗ throws on Bun
+// ✗ throws on Bun / Cloudflare
 export async function GET(req: Request, res: Response) {
   const data = await fetchData()
-  const sse = res.initSSE()  // too late
+  const sse = res.initSSE()  // too late — streaming window already closed
 }
 
-// ✓ fetch data first, then init
-export async function GET(req: Request, res: Response) {
-  const data = await fetchData()
-  const sse = res.initSSE()  // works on Node/Netlify/Vercel but not Bun
-}
-
-// ✓ workaround: initSSE before any await
+// ✓ init before any await, then fetch
 export async function GET(req: Request, res: Response) {
   const sse = res.initSSE()
   const data = await fetchData()
@@ -375,7 +479,8 @@ export async function GET(req: Request, res: Response) {
 }
 ```
 
-This is a constraint of Bun's HTTP model. Once the handler's first `await` resolves, response headers are committed and the streaming decision is final. Node.js, Vercel, and Netlify do not have this constraint.
+Once the handler's first `await` resolves, the streaming decision is final. Node.js, Vercel,
+and Netlify do not have this constraint.
 
 **Client**
 
@@ -411,10 +516,11 @@ import { createServer } from 'lacis'
 createServer(routesDir, {
   port: 3000,
   isDev: process.env.NODE_ENV === 'development',
-  platform: 'node',            // 'node' | 'bun' | 'vercel' | 'netlify'
+  platform: 'node',            // 'node' | 'bun' | 'vercel' | 'netlify' | 'cloudflare'
   timeout: 30000,
+  maxBodySize: 10_485_760,     // max request body in bytes (default 10 MB; 413 when exceeded)
 
-  defaultHeaders: {
+  defaultHeaders: {            // applied on node, bun and cloudflare
     'X-Powered-By': 'Lacis',
   },
 
@@ -462,6 +568,38 @@ export default createServer(getRoutesDir(), { platform: 'vercel' })
 // Netlify
 export const handler = createServer(getRoutesDir(), { platform: 'netlify' })
 ```
+
+Cloudflare Workers use the serverless manifest directly:
+
+```ts
+// worker.ts
+import { cloudflareAdapter } from 'lacis/adapters'
+import { routes } from './routes/_manifest.js'
+
+export default cloudflareAdapter.createHandler({ routes })
+```
+
+## Runtime behavior & constraints
+
+Lacis runs on five runtimes; a few behaviors differ by necessity. These are stable and
+intentional.
+
+| Behavior | node | bun | cloudflare | vercel | netlify |
+|---|---|---|---|---|---|
+| **Streaming** (`res.stream` / SSE) | live | live | live | buffered | buffered |
+| **`initSSE()` before first `await`** | not required | required | required | not required | not required |
+| **`defaultHeaders`** | ✓ | ✓ | ✓ | — | — |
+| **`req.platform`** | `{}` | `{}` | `{ env, ctx, cf }` | `{}` | `{}` |
+| **405 `Allow` header** | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+- **Streaming live vs buffered**: node, bun and cloudflare stream chunks as they are produced;
+  vercel and netlify buffer the whole response and send it in one block (their function model).
+  Cloudflare is serverless but streams *live* because it uses the Web Response model.
+- **Request distribution (node cluster)**: handled by the OS via round-robin (`SCHED_RR`).
+  Lacis does **not** do application-level load balancing — the worker supervisor only forks,
+  restarts, and gracefully shuts down workers.
+- **SSE window**: on bun/cloudflare, `initSSE()` must run before the handler's first `await`
+  (see the SSE section).
 
 ## License
 
