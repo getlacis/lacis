@@ -1,4 +1,4 @@
-import type { Adapter, ServerlessConfig } from '@/types'
+import type { Adapter, ServerlessConfig, PlatformContext } from '@/types'
 import { findRoute, isRouteError, registerRoutes } from '@/core/router'
 import {
   runMiddlewares, registerMiddlewareConfig, registerMiddlewares,
@@ -6,49 +6,21 @@ import {
 } from '@/core/middleware'
 import { registerCorsConfig } from '@/core/cors'
 import {
-  handleAdapterError, parseQueryString, withRequestMethods, type LacisHeaders,
+  handleAdapterError, parseQueryString, withRequestMethods,
 } from '@/utils/adapter-base'
-import { WebApiResponse, buildWebApiResponse, WEB_MAX_BODY_SIZE } from '@/utils/web-adapter-base'
+import { WebApiResponse, WebApiRequestBase, buildWebApiResponse } from '@/utils/web-adapter-base'
 
-class _CFRequestBase {
-  params: Record<string, string> = {}
-  url: string
-  method: string
-  headers: LacisHeaders
-  env: unknown
-  ctx: unknown
-  socket = { setTimeout: (_: number) => {} } as const
-  connection: { remoteAddress: string }
-  private _req: globalThis.Request
-
-  cf: unknown
+class _CFRequestBase extends WebApiRequestBase {
+  // Cloudflare-specific: all platform context lives under req.platform; the CF
+  // scaffold's env.d.ts augments PlatformContext so these are accessible without
+  // `as any`. The real client IP comes from the cf-connecting-ip header.
   constructor(req: globalThis.Request, url: { pathname: string; search: string }, env: unknown, ctx: unknown) {
-    this._req = req
-    this.url = url.pathname + url.search
-    this.method = req.method
-    this.headers = req.headers as unknown as LacisHeaders
-    this.env = env
-    this.ctx = ctx
-    this.cf = (req as any).cf
-    this.connection = { remoteAddress: '' }
-  }
-
-  setTimeout(_: number) {}
-
-  body() {
-    return this._req.arrayBuffer().then((b: ArrayBuffer) => {
-      if (b.byteLength > WEB_MAX_BODY_SIZE)
-        throw Object.assign(new Error('Payload Too Large'), { code: 413 })
-      return Buffer.from(b)
-    })
+    super(req, url.pathname + url.search, (req.headers as any).get?.('cf-connecting-ip') ?? '')
+    this.platform = { env, ctx, cf: (req as any).cf } as PlatformContext
   }
 }
 
-class CFRequest extends withRequestMethods(_CFRequestBase) {
-  json<T = any>(): Promise<T> {
-    return (this as any)._req.json() as Promise<T>
-  }
-}
+class CFRequest extends withRequestMethods(_CFRequestBase) {}
 
 class CFResponse extends WebApiResponse {
   protected _adapterName = 'cloudflare'
@@ -63,6 +35,8 @@ export const cloudflareAdapter: Adapter = {
         'Import your routes manifest and pass { routes } instead.',
       )
     }
+
+    const defaultHeadersEntries = config.defaultHeaders ? Object.entries(config.defaultHeaders) : []
 
     let initPromise: Promise<void> | null = null
 
@@ -84,10 +58,15 @@ export const cloudflareAdapter: Adapter = {
 
         const url = new URL(request.url)
         const req = new CFRequest(request, url, env, ctx)
+        req._maxBodySize = (config as any).maxBodySize
         ;(req as any).query = parseQueryString(url.search)
         const res = new CFResponse()
 
         try {
+          for (let i = 0; i < defaultHeadersEntries.length; i++) {
+            res.setHeader(defaultHeadersEntries[i][0], defaultHeadersEntries[i][1])
+          }
+
           if (hasMiddlewares()) {
             const ok = await runMiddlewares('beforeRequest', req as any, res as any)
             if (!ok || res.headersSent) return buildWebApiResponse(res)
@@ -108,9 +87,11 @@ export const cloudflareAdapter: Adapter = {
 
           if (isRouteError(route)) {
             if (hasMiddlewares()) await runMiddlewares('onError', req as any, res as any)
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+            if (route.allowedMethods?.length) headers['Allow'] = route.allowedMethods.join(', ')
             return new globalThis.Response(JSON.stringify({ error: route.error }), {
               status: route.status ?? 500,
-              headers: { 'Content-Type': 'application/json' },
+              headers,
             })
           }
 

@@ -1,9 +1,48 @@
-import type { SSEOptions } from '@/types'
-import { withResponseMethods } from '@/utils/adapter-base'
-
-export const WEB_MAX_BODY_SIZE = 10_485_760
+import type { SSEOptions, Locals, PlatformContext } from '@/types'
+import { withResponseMethods, type LacisHeaders } from '@/utils/adapter-base'
+import { DEFAULT_MAX_BODY_SIZE } from '@/utils/constants'
 
 const _encoder = new TextEncoder()
+
+// Shared request base for runtime-Web adapters (Bun, Cloudflare): both wrap a Web
+// `Request`. Common parts live here (body() via arrayBuffer + size check, native
+// json()); runtime-specific bits (Bun's text(), Cloudflare's platform context and
+// cf-connecting-ip) are added by the subclasses.
+export class WebApiRequestBase {
+  params: Record<string, string> = {}
+  url: string
+  method: string
+  headers: LacisHeaders
+  connection: { remoteAddress: string }
+  socket = { setTimeout: (_: number) => {} } as const
+  _maxBodySize?: number
+  locals: Locals = {}
+  platform: PlatformContext = {}
+  protected _req: globalThis.Request
+
+  constructor(req: globalThis.Request, url: string, remoteAddress: string) {
+    this._req = req
+    this.url = url
+    this.method = req.method
+    this.headers = req.headers as unknown as LacisHeaders
+    this.connection = { remoteAddress }
+  }
+
+  setTimeout(_: number) {}
+
+  body(): Promise<Buffer> {
+    const limit = this._maxBodySize ?? DEFAULT_MAX_BODY_SIZE
+    return this._req.arrayBuffer().then((b: ArrayBuffer) => {
+      if (b.byteLength > limit)
+        throw Object.assign(new Error('Payload Too Large'), { code: 413 })
+      return Buffer.from(b)
+    })
+  }
+
+  json<T = any>(): Promise<T> {
+    return this._req.json() as Promise<T>
+  }
+}
 
 export class WebApiResponseBase {
   protected _adapterName = 'unknown'
