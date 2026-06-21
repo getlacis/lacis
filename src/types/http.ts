@@ -38,6 +38,9 @@ interface Request extends IncomingMessage {
   params?: Record<string, string>;
   query?: Record<string, string>;
   cookies: RequestCookies;
+  env?: unknown;
+  ctx?: unknown;
+  cf?: unknown;
   getHeader(name: string): string | undefined;
   createSSEClient(
     options?: SSEClientOptions,

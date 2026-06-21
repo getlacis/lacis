@@ -8,19 +8,16 @@ import {
 } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
 import { findRoute, loadRoutes } from "@/core/router";
-import type { Adapter, ServerConfig, ServerlessConfig, SSEOptions } from "@/types";
+import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import {
   handleAdapterError,
   parseQueryString,
   withRequestMethods,
-  withResponseMethods,
   type LacisHeaders,
 } from "@/utils/adapter-base";
+import { WebApiResponse, buildWebApiResponse, WEB_MAX_BODY_SIZE } from "@/utils/web-adapter-base";
 import { primaryLog } from "@/utils/logs";
 import os from "os";
-
-const MAX_BODY_SIZE = 10_485_760;
-const _encoder = new TextEncoder();
 
 class _BunRequestBase {
   params: Record<string, string> = {};
@@ -46,7 +43,7 @@ class _BunRequestBase {
   }
   body() {
     return this._req.arrayBuffer().then((b: ArrayBuffer) => {
-      if (b.byteLength > MAX_BODY_SIZE)
+      if (b.byteLength > WEB_MAX_BODY_SIZE)
         throw Object.assign(new Error("Payload Too Large"), { code: 413 });
       return Buffer.from(b);
     });
@@ -60,145 +57,8 @@ class BunRequest extends withRequestMethods(_BunRequestBase) {
   }
 }
 
-class _BunResponseBase {
-  statusCode = 200;
-  headersSent = false;
-  get finished() {
-    return this.headersSent;
-  }
-  get writableEnded() {
-    return this.headersSent;
-  }
-
-  _body: any = null;
-  _headers: string[] | null = null;
-  _sseReadable: ReadableStream<Uint8Array> | null = null;
-  _streamBody: ReadableStream<Uint8Array> | null = null;
-  private _sseWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
-  private _sseWindowClosed = false;
-  private _listeners: ((...a: any[]) => void)[] | null = null;
-
-  on(event: string, listener: (...a: any[]) => void) {
-    if (event === "finish" || event === "close") {
-      if (!this._listeners) this._listeners = [];
-      this._listeners.push(listener);
-    }
-    return this;
-  }
-  once(event: string, listener: (...a: any[]) => void) {
-    return this.on(event, listener);
-  }
-  emit(event: string) {
-    if ((event === "finish" || event === "close") && this._listeners)
-      for (let i = 0; i < this._listeners.length; i++) this._listeners[i]();
-    return true;
-  }
-
-  setHeader(name: string, value: string | string[]) {
-    if (!this._headers) this._headers = [];
-    if (Array.isArray(value)) {
-      for (const v of value) this._headers.push(name, v);
-    } else {
-      this._headers.push(name, value);
-    }
-    return this;
-  }
-  getHeader(name: string) {
-    if (!this._headers) return undefined;
-    const lo = name.toLowerCase();
-    for (let i = 0; i < this._headers.length; i += 2)
-      if (this._headers[i].toLowerCase() === lo) return this._headers[i + 1];
-  }
-  removeHeader(name: string) {
-    if (!this._headers) return this;
-    const lo = name.toLowerCase();
-    for (let i = 0; i < this._headers.length; i += 2)
-      if (this._headers[i].toLowerCase() === lo) {
-        this._headers.splice(i, 2);
-        break;
-      }
-    return this;
-  }
-  hasHeader(name: string) {
-    if (!this._headers) return false;
-    const lo = name.toLowerCase();
-    for (let i = 0; i < this._headers.length; i += 2)
-      if (this._headers[i].toLowerCase() === lo) return true;
-    return false;
-  }
-  writeHead(statusCode: number, headers?: Record<string, string> | null) {
-    this.statusCode = statusCode;
-    if (headers)
-      for (const [k, v] of Object.entries(headers)) this.setHeader(k, v);
-    return this;
-  }
-  write(chunk: any) {
-    if (this._sseWriter) {
-      this._sseWriter.write(_encoder.encode(String(chunk)));
-      return true;
-    }
-    this._body = (this._body ?? "") + chunk;
-    return true;
-  }
-  end(data?: any) {
-    if (data !== undefined) this.write(data);
-    if (this._sseWriter) this._sseWriter.close();
-    this.headersSent = true;
-    if (this._listeners)
-      for (let i = 0; i < this._listeners.length; i++) this._listeners[i]();
-    return this;
-  }
-
-  _initSseStream() {
-    if (this._sseWindowClosed)
-      throw new Error("[lacis/bun] initSSE() must be called synchronously before any `await` in your handler.");
-    const { readable, writable } = new TransformStream<Uint8Array>();
-    this._sseReadable = readable;
-    this._sseWriter = writable.getWriter();
-  }
-
-  _closeSseWindow() {
-    this._sseWindowClosed = true;
-  }
-}
-
-class BunResponse extends withResponseMethods(_BunResponseBase) {
-  initSSE(options?: SSEOptions) {
-    this._initSseStream();
-    return super.initSSE(options);
-  }
-
-  stream(body: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>): Promise<void> {
-    this.setHeader('Cache-Control', 'no-cache')
-    this.setHeader('X-Accel-Buffering', 'no')
-    if (body instanceof ReadableStream) {
-      this._streamBody = body as ReadableStream<Uint8Array>
-    } else {
-      this._streamBody = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          for await (const chunk of body as AsyncIterable<Uint8Array>) controller.enqueue(chunk)
-          controller.close()
-        },
-      })
-    }
-    this.headersSent = true
-    return Promise.resolve()
-  }
-
-  ndjson(iter: AsyncIterable<unknown>): Promise<void> {
-    const encoder = new TextEncoder()
-    this.setHeader('Content-Type', 'application/x-ndjson')
-    this.setHeader('Cache-Control', 'no-cache')
-    this.setHeader('X-Accel-Buffering', 'no')
-    this._streamBody = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        for await (const item of iter) controller.enqueue(encoder.encode(JSON.stringify(item) + '\n'))
-        controller.close()
-      },
-    })
-    this.headersSent = true
-    return Promise.resolve()
-  }
+class BunResponse extends WebApiResponse {
+  protected _adapterName = 'bun'
 }
 
 export const bunAdapter: Adapter = {
@@ -285,7 +145,7 @@ export const bunAdapter: Adapter = {
                 req as any,
                 res as any,
               );
-              if (!ok || res.headersSent) return buildResponse(res);
+              if (!ok || res.headersSent) return buildWebApiResponse(res);
             }
 
             const route = findRoute(pathname, request.method);
@@ -293,7 +153,7 @@ export const bunAdapter: Adapter = {
             if (!route) {
               if (hasNotFoundHook()) {
                 await runNotFoundHook(req as any, res as any);
-                if (res.headersSent) return buildResponse(res);
+                if (res.headersSent) return buildWebApiResponse(res);
               }
               return new Response(
                 JSON.stringify({ error: "Route not found" }),
@@ -335,7 +195,7 @@ export const bunAdapter: Adapter = {
 
             if (res._sseReadable) {
               // SSE: return the streaming response immediately; handler runs in background
-              return buildResponse(res, res._sseReadable);
+              return buildWebApiResponse(res, res._sseReadable);
             }
 
             // Regular request: wait for the handler to complete
@@ -351,7 +211,7 @@ export const bunAdapter: Adapter = {
               }
             }
 
-            return buildResponse(res);
+            return buildWebApiResponse(res);
           } catch (error) {
             await handleAdapterError(req as any, res as any, error);
             if (!res.headersSent) {
@@ -360,7 +220,7 @@ export const bunAdapter: Adapter = {
                 { status: 500, headers: { "Content-Type": "application/json" } },
               );
             }
-            return buildResponse(res);
+            return buildWebApiResponse(res);
           }
         },
       });
@@ -376,19 +236,3 @@ export const bunAdapter: Adapter = {
     };
   },
 };
-
-function buildResponse(res: _BunResponseBase, body?: ReadableStream<Uint8Array> | null): Response {
-  const responseBody = body ?? res._streamBody ?? res._body;
-  if (!res._headers) return new Response(responseBody, { status: res.statusCode });
-  const headers = new Headers();
-  for (let i = 0; i < res._headers.length; i += 2) {
-    const name = res._headers[i];
-    const value = res._headers[i + 1];
-    if (name.toLowerCase() === 'set-cookie') {
-      headers.append(name, value);
-    } else {
-      headers.set(name, value);
-    }
-  }
-  return new Response(responseBody, { status: res.statusCode, headers });
-}

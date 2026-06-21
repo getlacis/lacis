@@ -139,9 +139,29 @@ describe('dev — platform detection (vercel)', () => {
   });
 
   it('netlify.toml takes priority over vercel.json when both exist', async () => {
-    mockExistsSync.mockReturnValue(true); // both files exist
+    mockExistsSync.mockImplementation((p: string) => p.endsWith('netlify.toml') || p.endsWith('vercel.json'));
     await dev(ROUTES);
     expect(mockSpawn).toHaveBeenCalledWith('netlify', ['dev'], expect.any(Object));
+  });
+});
+
+describe('dev — platform detection (cloudflare)', () => {
+  it('detects cloudflare via wrangler.toml and spawns wrangler dev', async () => {
+    mockExistsSync.mockImplementation((p: string) => p.endsWith('wrangler.toml'));
+    await dev(ROUTES);
+    expect(mockSpawn).toHaveBeenCalledWith('wrangler', ['dev'], expect.objectContaining({ cwd: CWD }));
+  });
+
+  it('detects cloudflare via wrangler in devDependencies', async () => {
+    mockReadFileSync.mockReturnValue(JSON.stringify({ devDependencies: { wrangler: '*' } }));
+    await dev(ROUTES);
+    expect(mockSpawn).toHaveBeenCalledWith('wrangler', ['dev'], expect.any(Object));
+  });
+
+  it('wrangler.toml takes priority over netlify.toml and vercel.json', async () => {
+    mockExistsSync.mockReturnValue(true);
+    await dev(ROUTES);
+    expect(mockSpawn).toHaveBeenCalledWith('wrangler', ['dev'], expect.any(Object));
   });
 });
 

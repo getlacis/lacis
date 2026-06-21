@@ -135,9 +135,10 @@ export async function generateManifest(routesDir: string): Promise<void> {
   console.log(`[lacis] Generated manifest with ${routes.length} route(s) and ${middlewares.length} middleware(s)`)
 }
 
-type BuildPlatform = 'bun' | 'node' | 'vercel' | 'netlify'
+type BuildPlatform = 'bun' | 'node' | 'vercel' | 'netlify' | 'cloudflare'
 
 function detectPlatform(cwd: string): BuildPlatform {
+  if (existsSync(join(cwd, 'wrangler.toml'))) return 'cloudflare'
   if (existsSync(join(cwd, 'netlify.toml'))) return 'netlify'
   if (existsSync(join(cwd, 'vercel.json'))) return 'vercel'
 
@@ -147,6 +148,7 @@ function detectPlatform(cwd: string): BuildPlatform {
       devDependencies?: Record<string, string>
     }
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+    if (allDeps['wrangler']) return 'cloudflare'
     if (allDeps['@netlify/functions'] || allDeps['netlify-cli']) return 'netlify'
     if (allDeps['vercel'] || allDeps['@vercel/node']) return 'vercel'
   } catch {}
@@ -224,8 +226,8 @@ export async function build(routesDir: string, entry?: string): Promise<void> {
 
   await generateManifest(routesDir)
 
-  // Vercel/Netlify manage their own compilation pipeline; the manifest is all they need.
-  if (platform === 'vercel' || platform === 'netlify') {
+  // Vercel/Netlify/Cloudflare manage their own compilation pipeline; the manifest is all they need.
+  if (platform === 'vercel' || platform === 'netlify' || platform === 'cloudflare') {
     console.log(`[lacis] ${platform} detected — manifest generated, platform handles compilation`)
     return
   }

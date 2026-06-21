@@ -1,0 +1,12 @@
+{
+  "name": "lacis-example-cloudflare",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "lacis": "file:../../"
+  },
+  "devDependencies": {
+    "wrangler": "^4.101.0"
+  }
+}
