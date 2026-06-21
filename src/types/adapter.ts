@@ -39,6 +39,8 @@ interface ServerlessRoute {
 
 interface ServerlessConfig {
   routes: ServerlessRoute[];
+  maxBodySize?: number;
+  defaultHeaders?: Record<string, string>;
   cors?: CorsConfig;
   middleware?: {
     beforeRequest?: MiddlewareCallback | MiddlewareCallback[];

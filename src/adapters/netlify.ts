@@ -93,6 +93,7 @@ export const netlifyAdapter: Adapter = {
 
       applyRequestMethods(rawReq);
       applyResponseMethods(rawRes);
+      (rawReq as any)._maxBodySize = config.maxBodySize;
 
       // Single cast: IncomingMessage/ServerResponse don't know about the lacis methods we just applied
       const req = rawReq as unknown as Request;

@@ -13,6 +13,7 @@ import {
   createGatewayTimeoutError,
   normalizeError,
   isHttpError,
+  sendError,
 } from '@/core/errors';
 
 describe('createHttpError', () => {
@@ -151,5 +152,27 @@ describe('isHttpError', () => {
 
   it('returns false for a number', () => {
     expect(isHttpError(500)).toBe(false);
+  });
+});
+
+describe('sendError', () => {
+  function mockRes() {
+    const captured: { statusCode: number; body: string } = { statusCode: 0, body: '' };
+    const res: any = {
+      headersSent: false,
+      set statusCode(v: number) { captured.statusCode = v; },
+      get statusCode() { return captured.statusCode; },
+      setHeader() {},
+      end(b: string) { captured.body = b; },
+    };
+    return { res, captured };
+  }
+
+  it('maps a 413 to "Payload Too Large" in the response body', () => {
+    const { res, captured } = mockRes();
+    // Mirrors the raw error thrown by nodeBody when the body exceeds maxBodySize
+    sendError({ name: 'Error', code: 413, message: 'Payload Too Large', expose: false, log: false } as any, res);
+    expect(captured.statusCode).toBe(413);
+    expect(JSON.parse(captured.body)).toEqual({ error: 'Payload Too Large', code: 413 });
   });
 });

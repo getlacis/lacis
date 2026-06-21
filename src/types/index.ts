@@ -27,13 +27,12 @@ type Route = {
   params: string[];
 };
 
-// Dans src/types/index.ts
 interface ServerConfig {
-  // Options existantes
   isDev?: boolean;
   port?: number;
-  platform?: 'node' | 'vercel' | 'netlify' | 'bun';
+  platform?: 'node' | 'vercel' | 'netlify' | 'bun' | 'cloudflare';
   timeout?: number;
+  maxBodySize?: number;
   httpsOptions?: {
     cert?: string | Buffer;
     key?: string | Buffer;

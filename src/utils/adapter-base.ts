@@ -10,8 +10,7 @@ import type {
   SSEEventHandlers,
   SSEOptions,
 } from "@/types";
-
-const MAX_BODY_SIZE = 10_485_760; // 10 MB
+import { DEFAULT_MAX_BODY_SIZE } from "@/utils/constants";
 
 export interface LacisHeaders {
   get(name: string): string | null;
@@ -207,19 +206,26 @@ export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
 
 export function nodeBody(this: any): Promise<Buffer> {
   const chunks: Buffer[] = [];
+  const limit = this._maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
   let size = 0,
     settled = false;
   return new Promise((resolve, reject) => {
-    this.on("data", (chunk: Buffer) => {
+    const onData = (chunk: Buffer) => {
+      if (settled) return;
       size += chunk.length;
-      if (size > MAX_BODY_SIZE) {
+      if (size > limit) {
         settled = true;
-        this.destroy();
+        // Stop reading without destroying the socket, so the adapter can still
+        // send a clean 413 response. Node closes the connection on its own once
+        // the response ends with the request body left unconsumed.
+        this.pause();
+        this.removeListener("data", onData);
         reject(Object.assign(new Error("Payload Too Large"), { code: 413 }));
         return;
       }
       chunks.push(chunk);
-    })
+    };
+    this.on("data", onData)
       .on("end", () => {
         if (!settled) {
           settled = true;
