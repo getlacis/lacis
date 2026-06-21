@@ -57,6 +57,7 @@ export const vercelAdapter: Adapter = {
         }
 
         if (isRouteError(route)) {
+          if (route.allowedMethods?.length) res.setHeader("Allow", route.allowedMethods.join(", "));
           res.status(route.status ?? 500).json({ error: route.error });
           return;
         }

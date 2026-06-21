@@ -122,6 +122,7 @@ export const netlifyAdapter: Adapter = {
         if (isRouteError(route)) {
           return {
             statusCode: route.status ?? 500,
+            ...(route.allowedMethods?.length ? { headers: { Allow: route.allowedMethods.join(", ") } } : {}),
             body: JSON.stringify({ error: route.error }),
           };
         }

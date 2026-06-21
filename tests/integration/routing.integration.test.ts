@@ -44,6 +44,16 @@ describe('routing — static routes', () => {
     await close();
   });
 
+  it('sets the Allow header listing registered methods on a 405', async () => {
+    const { request, close } = await createTestApp({
+      routes: [{ path: '/users', handlers: { GET: handler200, POST: handler200 } }],
+    });
+    const res = await request.delete('/users').expect(405);
+    const allow = (res.headers['allow'] ?? '').split(',').map((m: string) => m.trim()).sort();
+    expect(allow).toEqual(['GET', 'POST']);
+    await close();
+  });
+
   it('trailing slash is normalised', async () => {
     const { request, close } = await createTestApp({ routes: [{ path: '/about', handlers: { GET: handler200 } }] });
     await request.get('/about/').expect(200);

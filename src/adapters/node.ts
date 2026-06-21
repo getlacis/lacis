@@ -157,8 +157,10 @@ export const nodeAdapter: Adapter = {
               return;
             }
 
-            if ("error" in route) {
+            if (isRouteError(route)) {
               const status = route.status || 500;
+              if (route.allowedMethods?.length)
+                res.setHeader("Allow", route.allowedMethods.join(", "));
               res.status(status).json({ error: route.error });
               requestTracker?.end(status, true);
               return;
