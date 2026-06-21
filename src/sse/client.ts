@@ -70,7 +70,7 @@ export function createSSEClient(
     return createClientInterface();
   }
 
-  // Pour les connexions avec URL, retourner une promesse pour permettre une utilisation async/await
+  // For URL-based connections, return a promise to allow async/await usage
   if (typeof urlOrReq === "string") {
     return new Promise((resolve, reject) => {
       startListening()

@@ -23,7 +23,7 @@
     "noPropertyAccessFromIndexSignature": false
   },
   "exclude": [
-    "node_modules",  // Exclure node_modules
-    "dist"            // Exclure le dossier dist du build
+    "node_modules",
+    "dist"
   ]
 }
