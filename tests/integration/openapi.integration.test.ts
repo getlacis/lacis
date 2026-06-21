@@ -98,4 +98,103 @@ describe('OpenAPI endpoint', () => {
     expect(body.paths['/openapi.json']).toBeUndefined()
     await close()
   })
+
+  it('includes operationId auto-generated from method and path', async () => {
+    const { request, close } = await createTestApp({
+      routes: [
+        { path: '/users', handlers: { GET: async (_req: any, res: any) => res.json([]) } },
+        { path: '/users/:id', handlers: { DELETE: async (_req: any, res: any) => res.json({}) } },
+      ],
+      openapi: { info: { title: 'T', version: '0' } },
+    })
+    const { body } = await request.get('/openapi.json').expect(200)
+    expect(body.paths['/users'].get.operationId).toBe('getUsers')
+    expect(body.paths['/users/{id}'].delete.operationId).toBe('deleteUsersById')
+    await close()
+  })
+
+  it('uses meta.operationId override when provided', async () => {
+    const { request, close } = await createTestApp({
+      routes: [{
+        path: '/users/:id',
+        handlers: {
+          GET: defineHandler({
+            meta: { operationId: 'fetchUser' },
+            handler: async (_req, res) => res.json({}),
+          }) as any,
+        },
+      }],
+      openapi: { info: { title: 'T', version: '0' } },
+    })
+    const { body } = await request.get('/openapi.json').expect(200)
+    expect(body.paths['/users/{id}'].get.operationId).toBe('fetchUser')
+    await close()
+  })
+
+  it('includes response schemas for each status code', async () => {
+    const { request, close } = await createTestApp({
+      routes: [{
+        path: '/users/:id',
+        handlers: {
+          GET: defineHandler({
+            responses: {
+              200: arktypeSchema({ type: 'object', properties: { id: { type: 'string' } } }) as any,
+              404: arktypeSchema({ type: 'object', properties: { error: { type: 'string' } } }) as any,
+            },
+            handler: async (_req, res) => res.json({}),
+          }) as any,
+        },
+      }],
+      openapi: { info: { title: 'T', version: '0' } },
+    })
+    const { body } = await request.get('/openapi.json').expect(200)
+    const responses = body.paths['/users/{id}'].get.responses
+    expect(responses['200'].description).toBe('OK')
+    expect(responses['200'].content['application/json'].schema).toBeDefined()
+    expect(responses['404'].description).toBe('Not Found')
+    expect(responses['404'].content['application/json'].schema).toBeDefined()
+    await close()
+  })
+
+  it('includes servers when configured', async () => {
+    const { request, close } = await createTestApp({
+      routes: [],
+      openapi: {
+        info: { title: 'T', version: '0' },
+        servers: [
+          { url: 'https://api.example.com', description: 'Production' },
+          { url: 'http://localhost:3000' },
+        ],
+      },
+    })
+    const { body } = await request.get('/openapi.json').expect(200)
+    expect(body.servers).toEqual([
+      { url: 'https://api.example.com', description: 'Production' },
+      { url: 'http://localhost:3000' },
+    ])
+    await close()
+  })
+
+  it('hoists description and example from schema to parameter level', async () => {
+    const { request, close } = await createTestApp({
+      routes: [{
+        path: '/users/:id',
+        handlers: {
+          GET: defineHandler({
+            params: arktypeSchema({
+              type: 'object',
+              properties: { id: { type: 'string', description: 'The user ID', example: 'user_123' } },
+            }) as any,
+            handler: async (_req, res) => res.json({}),
+          }) as any,
+        },
+      }],
+      openapi: { info: { title: 'T', version: '0' } },
+    })
+    const { body } = await request.get('/openapi.json').expect(200)
+    const idParam = body.paths['/users/{id}'].get.parameters.find((p: any) => p.name === 'id')
+    expect(idParam.description).toBe('The user ID')
+    expect(idParam.example).toBe('user_123')
+    await close()
+  })
 })

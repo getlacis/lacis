@@ -51,6 +51,7 @@ describe("buildOpenApiDoc", () => {
       router.addRoute("GET", "/health", () => {})
       const doc = await buildOpenApiDoc({ info })
       expect(doc.paths["/health"].get).toEqual({
+        operationId: "getHealth",
         responses: { "200": { description: "Success" } },
       })
     })
@@ -172,6 +173,47 @@ describe("buildOpenApiDoc", () => {
       expect(op.requestBody.content["application/json"].schema).toBeDefined()
     })
 
+    it("hoists description and example from schema to parameter level", async () => {
+      router.addRoute(
+        "GET",
+        "/users/[id]",
+        defineHandler({
+          params: arktypeSchema({
+            type: "object",
+            properties: { id: { type: "string", description: "The user ID", example: "user_123" } },
+          }),
+          query: arktypeSchema({
+            type: "object",
+            properties: { page: { type: "number", description: "Page number", example: 1 } },
+          }),
+          handler: async (_req, res) => res.json({}),
+        }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      const params = doc.paths["/users/{id}"].get.parameters
+      const idParam = params.find((p: any) => p.name === "id")
+      const pageParam = params.find((p: any) => p.name === "page")
+      expect(idParam.description).toBe("The user ID")
+      expect(idParam.example).toBe("user_123")
+      expect(pageParam.description).toBe("Page number")
+      expect(pageParam.example).toBe(1)
+    })
+
+    it("omits description and example when not present in schema", async () => {
+      router.addRoute(
+        "GET",
+        "/users/[id]",
+        defineHandler({
+          params: arktypeSchema({ type: "object", properties: { id: { type: "string" } } }),
+          handler: async (_req, res) => res.json({}),
+        }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      const idParam = doc.paths["/users/{id}"].get.parameters.find((p: any) => p.name === "id")
+      expect(idParam.description).toBeUndefined()
+      expect(idParam.example).toBeUndefined()
+    })
+
     it("omits parameters gracefully when converter is not available", async () => {
       router.addRoute(
         "GET",
@@ -191,6 +233,104 @@ describe("buildOpenApiDoc", () => {
       router.addRoute("GET", "/users", () => {})
       const doc = await buildOpenApiDoc({ info, path: "/docs/openapi.json" })
       expect(doc.openapi).toBe("3.1.0")
+    })
+  })
+
+  describe("operationId", () => {
+    it("auto-generates operationId for plain handlers", async () => {
+      router.addRoute("GET", "/users", () => {})
+      router.addRoute("POST", "/users", () => {})
+      router.addRoute("DELETE", "/users/[id]", () => {})
+      const doc = await buildOpenApiDoc({ info })
+      expect(doc.paths["/users"].get.operationId).toBe("getUsers")
+      expect(doc.paths["/users"].post.operationId).toBe("postUsers")
+      expect(doc.paths["/users/{id}"].delete.operationId).toBe("deleteUsersById")
+    })
+
+    it("auto-generates operationId for defineHandler routes", async () => {
+      router.addRoute("GET", "/users/[id]", defineHandler({ handler: async (_req, res) => res.json({}) }))
+      const doc = await buildOpenApiDoc({ info })
+      expect(doc.paths["/users/{id}"].get.operationId).toBe("getUsersById")
+    })
+
+    it("uses meta.operationId override when provided", async () => {
+      router.addRoute(
+        "GET",
+        "/users/[id]",
+        defineHandler({ meta: { operationId: "fetchUser" }, handler: async (_req, res) => res.json({}) }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      expect(doc.paths["/users/{id}"].get.operationId).toBe("fetchUser")
+    })
+
+    it("generates By<Param>And<Param> for multiple path params", async () => {
+      router.addRoute("GET", "/orgs/[org]/repos/[repo]", () => {})
+      const doc = await buildOpenApiDoc({ info })
+      expect(doc.paths["/orgs/{org}/repos/{repo}"].get.operationId).toBe("getOrgsReposByOrgAndRepo")
+    })
+  })
+
+  describe("responses", () => {
+    it("generates response schemas for each status code", async () => {
+      router.addRoute(
+        "GET",
+        "/users/[id]",
+        defineHandler({
+          responses: {
+            200: arktypeSchema({ type: "object", properties: { id: { type: "string" } } }),
+            404: arktypeSchema({ type: "object", properties: { error: { type: "string" } } }),
+          },
+          handler: async (_req, res) => res.json({}),
+        }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      const responses = doc.paths["/users/{id}"].get.responses
+      expect(responses["200"].description).toBe("OK")
+      expect(responses["200"].content["application/json"].schema).toBeDefined()
+      expect(responses["404"].description).toBe("Not Found")
+      expect(responses["404"].content["application/json"].schema).toBeDefined()
+    })
+
+    it("falls back to description-only when schema conversion fails", async () => {
+      router.addRoute(
+        "GET",
+        "/users",
+        defineHandler({
+          responses: { 200: unknownSchema() as any },
+          handler: async (_req, res) => res.json([]),
+        }),
+      )
+      const doc = await buildOpenApiDoc({ info })
+      const responses = doc.paths["/users"].get.responses
+      expect(responses["200"]).toEqual({ description: "OK" })
+      expect(responses["200"].content).toBeUndefined()
+    })
+
+    it("keeps default 200 Success when responses is not set", async () => {
+      router.addRoute("GET", "/users", defineHandler({ handler: async (_req, res) => res.json([]) }))
+      const doc = await buildOpenApiDoc({ info })
+      expect(doc.paths["/users"].get.responses).toEqual({ "200": { description: "Success" } })
+    })
+  })
+
+  describe("servers", () => {
+    it("includes servers when provided", async () => {
+      const doc = await buildOpenApiDoc({
+        info,
+        servers: [
+          { url: "https://api.example.com", description: "Production" },
+          { url: "http://localhost:3000" },
+        ],
+      })
+      expect(doc.servers).toEqual([
+        { url: "https://api.example.com", description: "Production" },
+        { url: "http://localhost:3000" },
+      ])
+    })
+
+    it("omits servers when not provided", async () => {
+      const doc = await buildOpenApiDoc({ info })
+      expect(doc.servers).toBeUndefined()
     })
   })
 })
