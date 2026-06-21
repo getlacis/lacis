@@ -63,6 +63,10 @@ interface ServerConfig {
       version: string
       description?: string
     }
+    servers?: Array<{
+      url: string
+      description?: string
+    }>
   };
 
   monitoring?: {
