@@ -7,8 +7,8 @@ import {
   runNotFoundHook,
 } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
-import { findRoute, loadRoutes } from "@/core/router";
-import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
+import { findRoute, isRouteError, loadRoutes } from "@/core/router";
+import type { Adapter, ServerConfig, ServerlessConfig, Locals, PlatformContext } from "@/types";
 import {
   extractPathname,
   handleAdapterError,
@@ -28,6 +28,8 @@ import os from "os";
 class _LacisRequestBase extends http.IncomingMessage {
   params: Record<string, string> = {};
   body = nodeBody;
+  locals: Locals = {};
+  platform: PlatformContext = {};
 }
 
 class LacisRequest extends withRequestMethods(_LacisRequestBase) {}

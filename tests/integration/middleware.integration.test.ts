@@ -1,6 +1,14 @@
 import { createTestApp } from './helpers/server';
 import type { Request, Response } from '@/types';
 
+// Application context flows through req.locals (typed via declaration merging),
+// not through request headers.
+declare module '@/types' {
+  interface Locals {
+    poweredBy?: string;
+  }
+}
+
 const ok = async (_req: Request, res: Response) => { res.status(200).json({ ok: true }); };
 const routes = [{ path: '/api', handlers: { GET: ok } }];
 
@@ -42,19 +50,19 @@ describe('middleware — beforeRequest', () => {
     await close();
   });
 
-  it('can add custom request headers visible to the handler', async () => {
+  it('passes application context to the handler through req.locals', async () => {
     const { request, close } = await createTestApp({
       routes: [{
         path: '/api',
         handlers: {
           GET: async (req: Request, res: Response) => {
-            res.status(200).json({ powered: req.getHeader('x-powered-by') });
+            res.status(200).json({ powered: req.locals.poweredBy });
           },
         },
       }],
       middleware: {
         beforeRequest: async (req: Request) => {
-          (req as any).headers['x-powered-by'] = 'lacis';
+          req.locals.poweredBy = 'lacis';
         },
       },
     });

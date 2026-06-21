@@ -369,6 +369,8 @@ export function applyRequestMethods(req: any): void {
   req.getHeader = _reqProto.getHeader;
   req.createSSEClient = _reqProto.createSSEClient;
   req.cookies = new RequestCookiesImpl(parseCookieHeader(req.headers));
+  req.locals = {};
+  req.platform = {};
 }
 
 export function extractPathname(url: string): string {

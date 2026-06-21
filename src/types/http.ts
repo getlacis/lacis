@@ -34,13 +34,26 @@ interface UploadedFile {
   size: number;
 }
 
+// Augmentable via declaration merging. By default `locals` is empty; enrich it in
+// your app with `declare module 'lacis' { interface Locals { user: ... } }`.
+// `locals` is global (visible on every route, even without auth) — a deliberate
+// trade-off for file-based routing. Per-route inference comes with `use:`.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface Locals {}
+
+// Augmentable via declaration merging. Empty by default, so on a node project
+// `req.platform` exposes nothing. The Cloudflare scaffold's env.d.ts injects the
+// shape ({ env, ctx, cf }). The name `platform` and its augmentability are frozen
+// for semver; the contents are free (injected by the scaffold).
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface PlatformContext {}
+
 interface Request extends IncomingMessage {
   params?: Record<string, string>;
   query?: Record<string, string>;
   cookies: RequestCookies;
-  env?: unknown;
-  ctx?: unknown;
-  cf?: unknown;
+  locals: Locals;
+  platform: PlatformContext;
   getHeader(name: string): string | undefined;
   createSSEClient(
     options?: SSEClientOptions,
@@ -66,4 +79,4 @@ interface Response extends ServerResponse {
   ndjson(iter: AsyncIterable<unknown>): Promise<void>;
 }
 
-export type { Request, Response, UploadedFile, CookieOptions, RequestCookies, ResponseCookies };
+export type { Request, Response, UploadedFile, CookieOptions, RequestCookies, ResponseCookies, Locals, PlatformContext };
