@@ -1,4 +1,4 @@
-import type { Request, Response } from "@/types"
+import type { Request, Response, MiddlewareCallback } from "@/types"
 import { createStore, interceptResponse, replayEntry, defaultCacheKey } from "./responseCache"
 import type { Store } from "./responseCache"
 
@@ -40,6 +40,24 @@ type ValidatedRequest<
   body: TBody extends StandardSchema ? InferOutput<TBody> : () => Promise<Buffer>
 }
 
+// Typed responses (opt-in): when `responses` is declared, `res` is narrowed so
+// that `res.status(code).json(data)` only accepts the schema declared for `code`.
+// A single source of truth — `responses` types the handler AND feeds the OpenAPI.
+type ResponsesMap = Record<number, StandardSchema>
+
+type ResponseSink<T> = Pick<Response, "setHeader" | "cookies" | "end"> & {
+  json(data: T): void
+  send(data: T): void
+}
+
+type TypedResponse<R extends ResponsesMap> = Omit<Response, "status" | "json" | "send"> & {
+  status<S extends keyof R & number>(code: S): ResponseSink<InferOutput<R[S]>>
+  json(data: InferOutput<R[keyof R & number]>): void
+  send(data: InferOutput<R[keyof R & number]>): void
+  // Escape hatch: the untyped Response for streaming / edge cases.
+  raw: Response
+}
+
 export interface HandlerMeta {
   summary?: string
   description?: string
@@ -58,21 +76,28 @@ export interface DefineHandlerConfig<
   TParams extends StandardSchema | undefined = undefined,
   TQuery extends StandardSchema | undefined = undefined,
   TBody extends StandardSchema | undefined = undefined,
+  TResponses extends ResponsesMap | undefined = undefined,
 > {
   params?: TParams
   query?: TQuery
   body?: TBody
-  responses?: Record<number, StandardSchema>
+  responses?: TResponses
+  // Per-route, per-method middleware. Runs after the path-based +middleware,
+  // before the handler. A middleware returning false (or sending the response)
+  // stops the chain and skips the handler. Typed as MiddlewareCallback[] today;
+  // a future per-route locals-inference enhancement can widen this to a typed
+  // tuple without breaking existing callers.
+  use?: MiddlewareCallback[]
   meta?: HandlerMeta
   cache?: HandlerCacheOptions
   handler: (
     req: ValidatedRequest<TParams, TQuery, TBody>,
-    res: Response
+    res: TResponses extends ResponsesMap ? TypedResponse<TResponses> : Response
   ) => void | Promise<void>
 }
 
 export type DefinedHandler = ((req: Request, res: Response) => Promise<void>) & {
-  _defineHandler: DefineHandlerConfig<any, any, any>
+  _defineHandler: DefineHandlerConfig<any, any, any, any>
 }
 
 async function runValidation<T>(
@@ -91,14 +116,74 @@ function formatIssues(issues: ReadonlyArray<StandardIssue>) {
   }))
 }
 
+// Dev-only: wrap json()/send() so a returned body that violates the declared
+// schema for the current status code fails loudly. Sync validators throw (the
+// adapter turns it into a 500); async validators are best-effort logged.
+function installResponseValidation(res: Response, responses: ResponsesMap): void {
+  const validate = (data: unknown) => {
+    const schema = responses[res.statusCode]
+    if (!schema) return
+    const result = schema["~standard"].validate(data)
+    if (result instanceof Promise) {
+      result.then((r) => {
+        if (r.issues)
+          console.error(
+            `[lacis] Response body for status ${res.statusCode} does not match its declared schema:`,
+            formatIssues(r.issues),
+          )
+      })
+      return
+    }
+    if (result.issues) {
+      throw Object.assign(
+        new Error(`Response body for status ${res.statusCode} does not match its declared schema`),
+        { issues: formatIssues(result.issues), status: 500 },
+      )
+    }
+  }
+
+  if (typeof res.json === "function") {
+    const origJson = res.json.bind(res)
+    res.json = ((data: any) => {
+      validate(data)
+      return origJson(data)
+    }) as Response["json"]
+  }
+
+  if (typeof res.send === "function") {
+    const origSend = res.send.bind(res)
+    res.send = ((data: any) => {
+      validate(data)
+      return origSend(data)
+    }) as Response["send"]
+  }
+}
+
 export function defineHandler<
   TParams extends StandardSchema | undefined = undefined,
   TQuery extends StandardSchema | undefined = undefined,
   TBody extends StandardSchema | undefined = undefined,
->(config: DefineHandlerConfig<TParams, TQuery, TBody>): DefinedHandler {
+  TResponses extends ResponsesMap | undefined = undefined,
+>(config: DefineHandlerConfig<TParams, TQuery, TBody, TResponses>): DefinedHandler {
   const store: Store | null = config.cache ? createStore(config.cache.maxSize ?? 500) : null
 
   const wrapped = async (req: Request, res: Response): Promise<void> => {
+    // Typed responses: expose the raw escape hatch, and validate the body against
+    // the declared schema in dev only (zero validation in prod — perf).
+    if (config.responses) {
+      ;(res as any).raw = res
+      if (process.env.NODE_ENV !== "production") {
+        installResponseValidation(res, config.responses)
+      }
+    }
+
+    // Per-route middleware: runs after path +middleware, before the handler.
+    if (config.use) {
+      for (const mw of config.use) {
+        const proceed = await mw(req, res)
+        if (proceed === false || res.headersSent) return
+      }
+    }
     if (store && config.cache) {
       const key = config.cache.key ? config.cache.key(req) : defaultCacheKey(req)
       const cached = await store.get(key)
@@ -146,7 +231,7 @@ export function defineHandler<
       ;(req as any).body = result.data
     }
 
-    await config.handler(req as ValidatedRequest<TParams, TQuery, TBody>, res)
+    await config.handler(req as ValidatedRequest<TParams, TQuery, TBody>, res as any)
   }
 
 

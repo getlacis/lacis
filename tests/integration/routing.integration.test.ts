@@ -1,7 +1,29 @@
 import { createTestApp } from './helpers/server';
+import { defineHandler } from '@/core/defineHandler';
 import type { Request, Response } from '@/types';
 
 const handler200 = async (_req: Request, res: Response) => { res.status(200).json({ ok: true }); };
+
+describe('routing — per-route use: middleware (method scoping)', () => {
+  it('applies use: middleware only to the method that declares it', async () => {
+    const guard = async (_req: Request, res: Response) => {
+      res.status(401).json({ error: 'unauthorized' });
+      return false;
+    };
+    const { request, close } = await createTestApp({
+      routes: [{
+        path: '/users',
+        handlers: {
+          GET: defineHandler({ handler: async (_req, res) => { res.status(200).json({ list: true }); } }),
+          POST: defineHandler({ use: [guard], handler: async (_req, res) => { res.status(201).json({ created: true }); } }),
+        },
+      }],
+    });
+    await request.get('/users').expect(200).expect({ list: true });
+    await request.post('/users').expect(401).expect({ error: 'unauthorized' });
+    await close();
+  });
+});
 
 describe('routing — static routes', () => {
   it('responds 200 on a registered GET route', async () => {
