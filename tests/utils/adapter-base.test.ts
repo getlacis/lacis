@@ -148,14 +148,34 @@ describe('withRequestMethods', () => {
       expect(data.file.size).toBe(fileContent.length);
     });
 
-    it('rejects when content-type is not multipart/form-data', async () => {
+    it('rejects when content-type is neither multipart nor urlencoded', async () => {
       const req = makeReq('some body', { 'content-type': 'application/json' });
-      await expect(req.form()).rejects.toThrow('Content-Type is not multipart/form-data');
+      await expect(req.form()).rejects.toThrow('Content-Type must be multipart/form-data or application/x-www-form-urlencoded');
     });
 
     it('rejects when boundary is missing from content-type', async () => {
       const req = makeReq('some body', { 'content-type': 'multipart/form-data' });
       await expect(req.form()).rejects.toThrow('Boundary not found');
+    });
+  });
+
+  describe('form() — application/x-www-form-urlencoded', () => {
+    it('parses a single field', async () => {
+      const req = makeReq('username=lycia', { 'content-type': 'application/x-www-form-urlencoded' });
+      const data = await req.form<{ username: string }>();
+      expect(data.username).toBe('lycia');
+    });
+
+    it('parses multiple fields', async () => {
+      const req = makeReq('username=lycia&role=admin', { 'content-type': 'application/x-www-form-urlencoded' });
+      const data = await req.form<Record<string, string>>();
+      expect(data).toEqual({ username: 'lycia', role: 'admin' });
+    });
+
+    it('decodes percent-encoded values', async () => {
+      const req = makeReq('greeting=hello%20world&email=a%40b.com', { 'content-type': 'application/x-www-form-urlencoded' });
+      const data = await req.form<Record<string, string>>();
+      expect(data).toEqual({ greeting: 'hello world', email: 'a@b.com' });
     });
   });
 });

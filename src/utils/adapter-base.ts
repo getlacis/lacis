@@ -125,17 +125,29 @@ export function withRequestMethods<T extends RequestMixinBase>(Base: T) {
     }
 
     form<R>(): Promise<R> {
-      return new Promise((resolve, reject) => {
-        const headers = this.headers;
-        const contentType =
-          typeof (headers as LacisHeaders).get === "function"
-            ? ((headers as LacisHeaders).get("content-type") ?? "")
-            : (((headers as Record<string, string | string[] | undefined>)["content-type"]) as string ?? "");
+      const headers = this.headers;
+      const contentType =
+        typeof (headers as LacisHeaders).get === "function"
+          ? ((headers as LacisHeaders).get("content-type") ?? "")
+          : (((headers as Record<string, string | string[] | undefined>)["content-type"]) as string ?? "");
 
-        if (!contentType.startsWith("multipart/form-data")) {
-          reject(new Error("Content-Type is not multipart/form-data"));
-          return;
-        }
+      if (contentType.startsWith("application/x-www-form-urlencoded")) {
+        return (this as any)
+          .body()
+          .then((buffer: Buffer) =>
+            Object.fromEntries(new URLSearchParams(buffer.toString())) as R,
+          );
+      }
+
+      if (!contentType.startsWith("multipart/form-data")) {
+        return Promise.reject(
+          new Error(
+            "Content-Type must be multipart/form-data or application/x-www-form-urlencoded",
+          ),
+        );
+      }
+
+      return new Promise((resolve, reject) => {
         const boundaryMatch = contentType.match(/boundary=(.+)$/);
         if (!boundaryMatch) {
           reject(new Error("Boundary not found"));
