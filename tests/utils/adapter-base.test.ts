@@ -178,6 +178,30 @@ describe('withRequestMethods', () => {
       expect(data).toEqual({ greeting: 'hello world', email: 'a@b.com' });
     });
   });
+
+  describe('body() — configurable max size', () => {
+    it('honors a custom _maxBodySize limit', async () => {
+      const req = new TestRequest(new Socket());
+      (req as any)._maxBodySize = 8;
+      process.nextTick(() => {
+        req.push(Buffer.from('123456789')); // 9 bytes > 8
+        req.push(null);
+      });
+      await expect(req.body()).rejects.toMatchObject({ code: 413 });
+    });
+
+    it('accepts a body within a raised custom limit', async () => {
+      const req = new TestRequest(new Socket());
+      (req as any)._maxBodySize = 11_000_000;
+      const large = Buffer.alloc(10_485_761, 'x'); // would exceed the 10 MB default
+      process.nextTick(() => {
+        req.push(large);
+        req.push(null);
+      });
+      const buf = await req.body();
+      expect(buf.length).toBe(10_485_761);
+    });
+  });
 });
 
 describe('withResponseMethods', () => {

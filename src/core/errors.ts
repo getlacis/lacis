@@ -25,6 +25,7 @@ const DEFAULT_ERROR_MESSAGES: Record<number, string> = {
   404: "Not Found",
   405: "Method Not Allowed",
   409: "Conflict",
+  413: "Payload Too Large",
   422: "Unprocessable Entity",
   429: "Too Many Requests",
   500: "Internal Server Error",

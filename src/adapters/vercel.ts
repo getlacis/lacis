@@ -33,6 +33,7 @@ export const vercelAdapter: Adapter = {
 
       applyRequestMethods(vercelReq);
       applyResponseMethods(vercelRes);
+      (vercelReq as any)._maxBodySize = config.maxBodySize;
 
       // Single cast: Vercel's types omit the lacis-specific methods we just applied
       const req = vercelReq as unknown as Request;

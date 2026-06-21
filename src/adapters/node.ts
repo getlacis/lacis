@@ -129,6 +129,7 @@ export const nodeAdapter: Adapter = {
             const rawUrl = req.url || "/";
             const pathname = extractPathname(rawUrl);
             (req as any).query = parseQueryString(rawUrl);
+            (req as any)._maxBodySize = config.maxBodySize;
 
             if (hasMiddlewares()) {
               const ok = await runMiddlewares(
