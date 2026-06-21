@@ -39,6 +39,10 @@ A hardening pass ahead of 1.0. Several items are intentionally breaking now (bef
   cluster workers; request distribution is the OS's job (round-robin `SCHED_RR`).
 - **BREAKING** `req.env` / `req.ctx` / `req.cf` removed from the root `Request`; runtime
   context now lives under `req.platform`.
+- **BREAKING** Froze the public export surface. Internal machinery (the router and
+  middleware registries, response-cache store plumbing, error normalization, the OpenAPI
+  doc builder) is no longer re-exported from the package root — only the supported API is.
+  The built-in adapters consume internals via deep imports; this does not affect them.
 - Consolidated the triplicated max-body-size constant into a single `DEFAULT_MAX_BODY_SIZE`.
 - Factored a shared `WebApiRequestBase` for the Bun and Cloudflare adapters.
 - Standardized route-error detection on `isRouteError` across all adapters.
