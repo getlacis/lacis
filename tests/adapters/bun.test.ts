@@ -14,6 +14,7 @@ const mockRunNotFoundHook = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/core/router', () => ({
   loadRoutes: (...args: any[]) => mockLoadRoutes(...args),
   findRoute: (...args: any[]) => mockFindRoute(...args),
+  isRouteError: (obj: any) => obj && typeof obj === 'object' && 'error' in obj,
 }));
 
 jest.mock('@/core/middleware', () => ({

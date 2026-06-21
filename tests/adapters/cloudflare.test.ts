@@ -152,13 +152,13 @@ describe('cloudflareAdapter — routing', () => {
   })
 })
 
-describe('cloudflareAdapter — env & ctx', () => {
-  it('exposes env on req', async () => {
+describe('cloudflareAdapter — req.platform (env, ctx, cf)', () => {
+  it('exposes env on req.platform', async () => {
     const handler = getHandler()
     let capturedEnv: unknown
     mockFindRoute.mockReturnValue(
       makeRoute(async (req: LacisRequest, res: LacisResponse) => {
-        capturedEnv = (req as any).env
+        capturedEnv = (req as any).platform.env
         res.status(200).json({})
       }),
     )
@@ -166,12 +166,12 @@ describe('cloudflareAdapter — env & ctx', () => {
     expect(capturedEnv).toBe(mockEnv)
   })
 
-  it('exposes ctx on req', async () => {
+  it('exposes ctx on req.platform', async () => {
     const handler = getHandler()
     let capturedCtx: unknown
     mockFindRoute.mockReturnValue(
       makeRoute(async (req: LacisRequest, res: LacisResponse) => {
-        capturedCtx = (req as any).ctx
+        capturedCtx = (req as any).platform.ctx
         res.status(200).json({})
       }),
     )
@@ -179,18 +179,54 @@ describe('cloudflareAdapter — env & ctx', () => {
     expect(capturedCtx).toBe(mockCtx)
   })
 
-  it('exposes cf on req', async () => {
+  it('exposes cf on req.platform', async () => {
     const handler = getHandler()
     let capturedCf: unknown
     const cfRequest = Object.assign(makeRequest('/'), { cf: { country: 'FR', colo: 'CDG' } })
     mockFindRoute.mockReturnValue(
       makeRoute(async (req: LacisRequest, res: LacisResponse) => {
-        capturedCf = (req as any).cf
+        capturedCf = (req as any).platform.cf
         res.status(200).json({})
       }),
     )
     await handler.fetch(cfRequest, mockEnv, mockCtx)
     expect(capturedCf).toEqual({ country: 'FR', colo: 'CDG' })
+  })
+
+  it('initialises an empty req.locals', async () => {
+    const handler = getHandler()
+    let capturedLocals: unknown
+    mockFindRoute.mockReturnValue(
+      makeRoute(async (req: LacisRequest, res: LacisResponse) => {
+        capturedLocals = (req as any).locals
+        res.status(200).json({})
+      }),
+    )
+    await handler.fetch(makeRequest('/'), mockEnv, mockCtx)
+    expect(capturedLocals).toEqual({})
+  })
+})
+
+describe('cloudflareAdapter — 405 & defaultHeaders parity', () => {
+  it('emits the Allow header on a 405 route error', async () => {
+    const handler = getHandler()
+    mockFindRoute.mockReturnValue({ error: 'Method Not Allowed', status: 405, allowedMethods: ['GET', 'POST'] })
+    mockIsRouteError.mockReturnValue(true)
+    const res = await handler.fetch(makeRequest('/users', 'DELETE'), mockEnv, mockCtx)
+    expect(res.status).toBe(405)
+    expect(res.headers.get('Allow')).toBe('GET, POST')
+  })
+
+  it('applies configured defaultHeaders to responses', async () => {
+    const handler = cloudflareAdapter.createHandler({
+      routes: [],
+      defaultHeaders: { 'X-Powered-By': 'lacis' },
+    }) as CFHandler
+    mockFindRoute.mockReturnValue(
+      makeRoute(async (_req: LacisRequest, res: LacisResponse) => { res.status(200).json({}) }),
+    )
+    const res = await handler.fetch(makeRequest('/'), mockEnv, mockCtx)
+    expect(res.headers.get('X-Powered-By')).toBe('lacis')
   })
 })
 

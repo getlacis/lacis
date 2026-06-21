@@ -7,55 +7,26 @@ import {
   runNotFoundHook,
 } from "@/core/middleware";
 import { registerCorsConfig } from "@/core/cors";
-import { findRoute, loadRoutes } from "@/core/router";
+import { findRoute, isRouteError, loadRoutes } from "@/core/router";
 import type { Adapter, ServerConfig, ServerlessConfig } from "@/types";
 import {
   handleAdapterError,
   parseQueryString,
   withRequestMethods,
-  type LacisHeaders,
 } from "@/utils/adapter-base";
-import { WebApiResponse, buildWebApiResponse, WEB_MAX_BODY_SIZE } from "@/utils/web-adapter-base";
+import { WebApiResponse, WebApiRequestBase, buildWebApiResponse } from "@/utils/web-adapter-base";
 import { primaryLog } from "@/utils/logs";
 import os from "os";
 
-class _BunRequestBase {
-  params: Record<string, string> = {};
-  url: string;
-  method: string;
-  headers: LacisHeaders;
-  socket = { setTimeout: (_: number) => {} } as const;
-  connection: { remoteAddress: string };
-  private _req: Request;
-
-  constructor(req: Request, pathname: string, search: string, remoteAddress: string) {
-    this._req = req;
-    this.url = pathname + search;
-    this.method = req.method;
-    this.headers = req.headers as unknown as LacisHeaders;
-    this.connection = { remoteAddress };
-  }
-
-  setTimeout(_: number) {}
-
+class _BunRequestBase extends WebApiRequestBase {
+  // Bun-specific: expose the native text() reader. body()/json() come from the
+  // shared base (json() uses Bun's native parser via the underlying Request).
   text() {
     return this._req.text();
   }
-  body() {
-    return this._req.arrayBuffer().then((b: ArrayBuffer) => {
-      if (b.byteLength > WEB_MAX_BODY_SIZE)
-        throw Object.assign(new Error("Payload Too Large"), { code: 413 });
-      return Buffer.from(b);
-    });
-  }
 }
 
-class BunRequest extends withRequestMethods(_BunRequestBase) {
-  // Uses Bun native JSON parser directly, skipping the body() to Buffer conversion
-  json<T = any>(): Promise<T> {
-    return (this as any)._req.json() as Promise<T>;
-  }
-}
+class BunRequest extends withRequestMethods(_BunRequestBase) {}
 
 class BunResponse extends WebApiResponse {
   protected _adapterName = 'bun'
@@ -127,7 +98,8 @@ export const bunAdapter: Adapter = {
           const url = new URL(request.url);
           const pathname = url.pathname;
 
-          const req = new BunRequest(request, pathname, url.search, server?.requestIP(request)?.address ?? "");
+          const req = new BunRequest(request, pathname + url.search, server?.requestIP(request)?.address ?? "");
+          req._maxBodySize = config.maxBodySize;
           (req as any).query = parseQueryString(url.search);
           const res = new BunResponse();
 
@@ -163,12 +135,14 @@ export const bunAdapter: Adapter = {
                 },
               );
             }
-            if ("error" in route) {
+            if (isRouteError(route)) {
               if (hasMiddlewares())
                 await runMiddlewares("onError", req as any, res as any);
+              const headers: Record<string, string> = { "Content-Type": "application/json" };
+              if (route.allowedMethods?.length) headers["Allow"] = route.allowedMethods.join(", ");
               return new Response(JSON.stringify({ error: route.error }), {
                 status: route.status || 500,
-                headers: { "Content-Type": "application/json" },
+                headers,
               });
             }
 
