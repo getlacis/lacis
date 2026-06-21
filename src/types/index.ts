@@ -91,4 +91,3 @@ export * from "./platform";
 export * from "./http";
 export * from "./middleware";
 export * from "./monitor";
-export * from "./loadBalancer";

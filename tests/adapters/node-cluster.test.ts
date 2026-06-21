@@ -19,17 +19,15 @@ jest.mock('cluster', () => ({
 
 const mockLbStart = jest.fn();
 const mockLbShutdown = jest.fn((cb?: () => void) => cb?.());
-const mockLbGetWorkerStats = jest.fn().mockReturnValue([]);
 const mockLbGetActiveWorkerCount = jest.fn().mockReturnValue(0);
-const mockCreateLoadBalancer = jest.fn().mockReturnValue({
+const mockCreateWorkerSupervisor = jest.fn().mockReturnValue({
   start: mockLbStart,
   shutdown: mockLbShutdown,
-  getWorkerStats: mockLbGetWorkerStats,
   getActiveWorkerCount: mockLbGetActiveWorkerCount,
 });
 
-jest.mock('@/utils/loadBalancer', () => ({
-  createLoadBalancer: (...args: any[]) => mockCreateLoadBalancer(...args),
+jest.mock('@/utils/workerSupervisor', () => ({
+  createWorkerSupervisor: (...args: any[]) => mockCreateWorkerSupervisor(...args),
 }));
 
 const mockLoadRoutes = jest.fn().mockResolvedValue(undefined);
@@ -72,10 +70,9 @@ beforeEach(() => {
   mockIsWorker = false;
   jest.clearAllMocks();
 
-  mockCreateLoadBalancer.mockReturnValue({
+  mockCreateWorkerSupervisor.mockReturnValue({
     start: mockLbStart,
     shutdown: mockLbShutdown,
-    getWorkerStats: mockLbGetWorkerStats,
     getActiveWorkerCount: mockLbGetActiveWorkerCount,
   });
   mockHttpCreateServer.mockReturnValue(makeMockHttpServer());
@@ -84,11 +81,11 @@ beforeEach(() => {
 
 
 describe('primary — cluster enabled', () => {
-  it('creates a load balancer and starts it with the configured worker count', async () => {
+  it('creates a worker supervisor and starts it with the configured worker count', async () => {
     const handler = nodeAdapter.createHandler('routes');
     await (handler as Function)({ ...baseConfig, cluster: { enabled: true, workers: 3 } });
 
-    expect(mockCreateLoadBalancer).toHaveBeenCalled();
+    expect(mockCreateWorkerSupervisor).toHaveBeenCalled();
     expect(mockLbStart).toHaveBeenCalledWith(3);
   });
 
@@ -125,27 +122,18 @@ describe('worker — cluster enabled', () => {
 
     expect(mockServer.listen).toHaveBeenCalledWith(3099, expect.any(Function));
   });
-
-  it('calls lb.start() for stats reporting', async () => {
-    mockHttpCreateServer.mockReturnValue(makeMockHttpServer());
-
-    const handler = nodeAdapter.createHandler('routes');
-    await (handler as Function)({ ...baseConfig, cluster: { enabled: true, workers: 2 } });
-
-    expect(mockLbStart).toHaveBeenCalled();
-  });
 });
 
 
 describe('non-cluster mode', () => {
-  it('does not create a load balancer', async () => {
+  it('does not create a worker supervisor', async () => {
     const mockServer = makeMockHttpServer();
     mockHttpCreateServer.mockReturnValue(mockServer);
 
     const handler = nodeAdapter.createHandler('routes');
     await (handler as Function)({ ...baseConfig, cluster: { enabled: false } });
 
-    expect(mockCreateLoadBalancer).not.toHaveBeenCalled();
+    expect(mockCreateWorkerSupervisor).not.toHaveBeenCalled();
   });
 
   it('calls server.listen() directly', async () => {
