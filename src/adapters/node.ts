@@ -19,7 +19,7 @@ import {
 } from "@/utils/adapter-base";
 import { primaryLog } from "@/utils/logs";
 import { getMonitor } from "@/utils/monitor";
-import { createLoadBalancer } from "@/utils/loadBalancer";
+import { createWorkerSupervisor } from "@/utils/workerSupervisor";
 import cluster from "cluster";
 import http from "http";
 import https from "https";
@@ -91,8 +91,8 @@ export const nodeAdapter: Adapter = {
           try { cluster.schedulingPolicy = cluster.SCHED_RR; } catch {}
         }
 
-        const lb = createLoadBalancer();
-        lb.start(numWorkers);
+        const supervisor = createWorkerSupervisor();
+        supervisor.start(numWorkers);
 
         primaryLog(`🚀 Server running at ${protocol}://localhost:${port}/` + (isDev ? ' (dev)' : ''));
         if (isDev && performanceMonitor) {
@@ -102,7 +102,7 @@ export const nodeAdapter: Adapter = {
         return {
           close: (callback?: () => void) => {
             if (performanceMonitor) performanceMonitor.stop();
-            lb.shutdown(callback);
+            supervisor.shutdown(callback);
           },
         };
       }
@@ -224,10 +224,6 @@ export const nodeAdapter: Adapter = {
         });
 
         const protocol = config.httpsOptions ? "https" : "http";
-
-        if (cluster.isWorker) {
-          createLoadBalancer().start();
-        }
 
         server.listen(port, () => {
           if (!clusterConfig?.enabled) {
