@@ -1,4 +1,4 @@
-import type { Request, Response, MiddlewareCallback } from "@/types"
+import type { Request, Response, Locals } from "@/types"
 import { createStore, interceptResponse, replayEntry, defaultCacheKey } from "./responseCache"
 import type { Store } from "./responseCache"
 
@@ -58,6 +58,23 @@ type TypedResponse<R extends ResponsesMap> = Omit<Response, "status" | "json" | 
   raw: Response
 }
 
+// Per-route middleware with context inference. A `use:` middleware may simply
+type UseMiddleware = (req: Request, res: Response) => unknown
+
+// The locals contribution of one middleware = the object part of its return type
+// (false / boolean / void / Promise contribute nothing).
+type LocalsOf<M> = M extends (...args: any[]) => infer R
+  ? Extract<Awaited<R>, object> extends infer C
+    ? [C] extends [never] ? {} : C
+    : {}
+  : {}
+
+// Accumulated locals contributed by a tuple of `use:` middlewares.
+type MergedLocals<T extends readonly unknown[]> =
+  T extends readonly [infer Head, ...infer Tail]
+    ? LocalsOf<Head> & MergedLocals<Tail>
+    : {}
+
 export interface HandlerMeta {
   summary?: string
   description?: string
@@ -77,27 +94,28 @@ export interface DefineHandlerConfig<
   TQuery extends StandardSchema | undefined = undefined,
   TBody extends StandardSchema | undefined = undefined,
   TResponses extends ResponsesMap | undefined = undefined,
+  TUse extends readonly UseMiddleware[] = readonly [],
 > {
   params?: TParams
   query?: TQuery
   body?: TBody
   responses?: TResponses
   // Per-route, per-method middleware. Runs after the path-based +middleware,
-  // before the handler. A middleware returning false (or sending the response)
-  // stops the chain and skips the handler. Typed as MiddlewareCallback[] today;
-  // a future per-route locals-inference enhancement can widen this to a typed
-  // tuple without breaking existing callers.
-  use?: MiddlewareCallback[]
+  // before the handler. Returning false (or sending the response) stops the chain;
+  // returning an object merges it into req.locals and infers its type for the
+  // handler. The variadic `[...TUse]` captures the tuple so contributions can be
+  // accumulated per element.
+  use?: readonly [...TUse]
   meta?: HandlerMeta
   cache?: HandlerCacheOptions
   handler: (
-    req: ValidatedRequest<TParams, TQuery, TBody>,
+    req: ValidatedRequest<TParams, TQuery, TBody> & { locals: Locals & MergedLocals<TUse> },
     res: TResponses extends ResponsesMap ? TypedResponse<TResponses> : Response
   ) => void | Promise<void>
 }
 
 export type DefinedHandler = ((req: Request, res: Response) => Promise<void>) & {
-  _defineHandler: DefineHandlerConfig<any, any, any, any>
+  _defineHandler: DefineHandlerConfig<any, any, any, any, any>
 }
 
 async function runValidation<T>(
@@ -164,7 +182,8 @@ export function defineHandler<
   TQuery extends StandardSchema | undefined = undefined,
   TBody extends StandardSchema | undefined = undefined,
   TResponses extends ResponsesMap | undefined = undefined,
->(config: DefineHandlerConfig<TParams, TQuery, TBody, TResponses>): DefinedHandler {
+  TUse extends readonly UseMiddleware[] = readonly [],
+>(config: DefineHandlerConfig<TParams, TQuery, TBody, TResponses, TUse>): DefinedHandler {
   const store: Store | null = config.cache ? createStore(config.cache.maxSize ?? 500) : null
 
   const wrapped = async (req: Request, res: Response): Promise<void> => {
@@ -177,11 +196,14 @@ export function defineHandler<
       }
     }
 
-    // Per-route middleware: runs after path +middleware, before the handler.
+    // Per-route middleware: runs after path +middleware, before the handler. A
+    // returned object is merged into req.locals (and typed for the handler).
     if (config.use) {
       for (const mw of config.use) {
-        const proceed = await mw(req, res)
-        if (proceed === false || res.headersSent) return
+        const result = await mw(req, res)
+        if (result === false || res.headersSent) return
+        if (result && typeof result === "object")
+          Object.assign((req as any).locals ??= {}, result)
       }
     }
     if (store && config.cache) {
@@ -231,7 +253,7 @@ export function defineHandler<
       ;(req as any).body = result.data
     }
 
-    await config.handler(req as ValidatedRequest<TParams, TQuery, TBody>, res as any)
+    await config.handler(req as any, res as any)
   }
 
 

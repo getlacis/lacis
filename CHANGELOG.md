@@ -17,7 +17,9 @@ A hardening pass ahead of 1.0. Several items are intentionally breaking now (bef
 - **`req.locals`** — typed, augmentable per-request app context (declaration merging).
 - **`req.platform`** — typed, augmentable runtime bindings; populated with `{ env, ctx, cf }`
   on Cloudflare, empty elsewhere.
-- **Per-route middleware** `use: MiddlewareCallback[]` in `defineHandler`, scoped by method.
+- **Per-route middleware** `use: [...]` in `defineHandler`, scoped by method. A middleware
+  that returns an object has it merged into `req.locals` with the type inferred for the
+  handler — typed per-route context with no annotations or declaration merging.
 - **Cloudflare Workers adapter** built on the shared Web adapter base (live streaming).
 - **`application/x-www-form-urlencoded`** support in `req.form()` (in addition to multipart).
 - **`maxBodySize`** server option (default 10 MB), propagated to all adapters.

@@ -228,13 +228,37 @@ export const POST = defineHandler({
 })
 ```
 
+**Typed context, zero boilerplate.** A `use:` middleware that **returns an object** has it
+merged into `req.locals` — and the type is **inferred** for the handler. No annotations, no
+`declare module`:
+
+```ts
+// middleware: just return what you add to the context
+const auth = (req) => {
+  const user = verify(req.getHeader('authorization'))
+  if (!user) return false            // stops the chain
+  return { user }                    // merged into req.locals, type inferred
+}
+
+export const GET = defineHandler({
+  use: [auth],
+  handler: async (req, res) => {
+    res.json({ id: req.locals.user.id })  // req.locals.user is fully typed here
+  },
+})
+```
+
 ## Request context: `req.locals` and `req.platform`
 
 Both use **declaration merging** — augment them once and they are typed everywhere.
 
 **`req.locals`** — pass application data from middleware to handlers (instead of abusing
-headers). Global by design: every route "sees" the shape (a deliberate trade-off for
-file-based routing).
+headers). Two ways to type it:
+
+- **Per-route (preferred):** return an object from a [`use:`](#per-route-middleware-use)
+  middleware — it's merged into `req.locals` and inferred for that handler, no annotations.
+- **Global:** for cross-cutting context set by a `+middleware.global.ts`, augment `Locals`
+  once (every route then sees the shape — a deliberate trade-off for file-based routing):
 
 ```ts
 declare module 'lacis' {
@@ -243,7 +267,7 @@ declare module 'lacis' {
   }
 }
 
-// in a middleware
+// in a +middleware file
 req.locals.user = await authenticate(req)
 // in a handler
 res.json({ id: req.locals.user.id })
