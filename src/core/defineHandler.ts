@@ -100,6 +100,8 @@ export interface DefineHandlerConfig<
   query?: TQuery
   body?: TBody
   responses?: TResponses
+  // Runtime check that the response body matches the declared `responses` schema.
+  validateResponses?: boolean
   // Per-route, per-method middleware. Runs after the path-based +middleware,
   // before the handler. Returning false (or sending the response) stops the chain;
   // returning an object merges it into req.locals and infers its type for the
@@ -191,7 +193,9 @@ export function defineHandler<
     // the declared schema in dev only (zero validation in prod — perf).
     if (config.responses) {
       ;(res as any).raw = res
-      if (process.env.NODE_ENV !== "production") {
+      // Default: validate in dev only (perf). `validateResponses` overrides either way.
+      const shouldValidate = config.validateResponses ?? process.env.NODE_ENV !== "production"
+      if (shouldValidate) {
         installResponseValidation(res, config.responses)
       }
     }

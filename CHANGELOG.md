@@ -13,7 +13,8 @@ A hardening pass ahead of 1.0. Several items are intentionally breaking now (bef
 - **Typed responses** in `defineHandler`: declaring `responses` narrows `res` so
   `res.status(code).json(data)` only accepts the schema for that status code. Same
   `responses` feeds the OpenAPI spec (single source of truth). Escape hatch: `res.raw`.
-  Dev-only runtime validation (`NODE_ENV !== 'production'`); zero validation in production.
+  Dev-only runtime validation by default (`NODE_ENV !== 'production'`); zero in production,
+  overridable per route with `validateResponses: true` / `false`.
 - **`req.locals`** — typed, augmentable per-request app context (declaration merging).
 - **`req.platform`** — typed, augmentable runtime bindings; populated with `{ env, ctx, cf }`
   on Cloudflare, empty elsewhere.

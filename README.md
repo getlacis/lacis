@@ -205,8 +205,10 @@ export const GET = defineHandler({
 
 - **Opt-in & non-breaking**: without `responses`, `res` stays the regular `Response`.
 - **Escape hatch**: `res.raw` is the untyped `Response` for streaming / edge cases.
-- **Dev-only runtime check**: in non-production (`NODE_ENV !== 'production'`), a returned
-  body that violates its declared schema fails loudly. Zero validation in production (perf).
+- **Dev-only runtime check** (default): in non-production (`NODE_ENV !== 'production'`), a
+  returned body that violates its declared schema fails loudly; zero validation in production
+  (perf). Override per route with `validateResponses: true` (enforce in prod too) or
+  `validateResponses: false` (disable entirely).
 
 ### Per-route middleware (`use:`)
 
