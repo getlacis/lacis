@@ -48,6 +48,7 @@
   "scripts": {
     "build": "tsup",
     "build:watch": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "jest",
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration"

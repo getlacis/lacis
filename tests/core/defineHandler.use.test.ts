@@ -75,4 +75,36 @@ describe('defineHandler — use: per-route middleware', () => {
     await handler(req, res)
     expect(seen[0]).toBe(req)
   })
+
+  it('merges objects returned by middleware into req.locals', async () => {
+    const req = makeReq()
+    const { res } = makeRes()
+    let seenLocals: any
+    const handler = defineHandler({
+      use: [
+        () => ({ user: { id: 'u1' } }),
+        () => ({ session: { token: 'abc' } }),
+        () => undefined, // contributes nothing
+      ],
+      handler: async (r) => { seenLocals = r.locals },
+    })
+    await handler(req, res)
+    expect(seenLocals).toMatchObject({ user: { id: 'u1' }, session: { token: 'abc' } })
+  })
+
+  it('does not merge when a middleware returns false (and stops)', async () => {
+    const req = makeReq()
+    const { res } = makeRes()
+    const handlerSpy = jest.fn()
+    const handler = defineHandler({
+      use: [
+        (_r: Request, rs: Response) => { rs.status(401).json({ error: 'no' }); return false },
+        () => ({ user: { id: 'u1' } }),
+      ],
+      handler: handlerSpy,
+    })
+    await handler(req, res)
+    expect(handlerSpy).not.toHaveBeenCalled()
+    expect((req as any).locals.user).toBeUndefined()
+  })
 })
