@@ -91,6 +91,33 @@ describe('defineHandler — typed responses', () => {
       await expect(handler(req, res)).resolves.toBeUndefined()
       expect(captured.body).toEqual({ id: 1 })
     })
+
+    it('validateResponses:true forces validation in production', async () => {
+      const handler = defineHandler({
+        responses: { 404: failSchema('bad shape') as any },
+        validateResponses: true,
+        handler: (_req, res) => { res.status(404).json({ id: 1 } as any) },
+      })
+      const req = makeReq()
+      const { res } = makeRes()
+      await expect(handler(req, res)).rejects.toThrow('does not match its declared schema')
+    })
+  })
+
+  describe('validateResponses:false disables validation in dev', () => {
+    beforeEach(() => { process.env.NODE_ENV = 'development' })
+
+    it('skips validation when explicitly disabled', async () => {
+      const handler = defineHandler({
+        responses: { 404: failSchema('bad shape') as any },
+        validateResponses: false,
+        handler: (_req, res) => { res.status(404).json({ id: 1 } as any) },
+      })
+      const req = makeReq()
+      const { res, captured } = makeRes()
+      await expect(handler(req, res)).resolves.toBeUndefined()
+      expect(captured.body).toEqual({ id: 1 })
+    })
   })
 })
 
