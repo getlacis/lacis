@@ -85,6 +85,7 @@ export default async function handler(req: Request, res: Response) {
 **Dynamic routes**
 
 Use bracket syntax for URL parameters: `routes/users/[id]/index.ts` → `/users/:id`
+(`[id?]` makes the segment optional).
 
 ```ts
 export async function GET(req: Request, res: Response) {
@@ -92,6 +93,30 @@ export async function GET(req: Request, res: Response) {
   res.json({ id })
 }
 ```
+
+**Typed params from the folder (`./$types`)**
+
+`lacis dev` / `lacis build` generates a per-route `$types` so `req.params` is typed
+**from the folder name** — no schema, no `defineHandler` needed:
+
+```ts
+// routes/users/[id]/index.ts
+import type { RouteHandler } from './$types'
+
+export const GET: RouteHandler = async (req, res) => {
+  req.params.id   // string — inferred from [id]
+  res.json({ id: req.params.id })
+}
+```
+
+This needs `rootDirs` in your `tsconfig.json` (the `create-lacis` scaffold sets it up):
+
+```json
+{ "compilerOptions": { "rootDirs": [".", "./.lacis/types"] } }
+```
+
+The generated `.lacis/` folder is a build artifact — add it to `.gitignore`. For full
+input *and* output validation, combine with [`defineHandler`](#definehandler)'s `params` schema.
 
 ## Request / Response API
 

@@ -18,6 +18,10 @@ A hardening pass ahead of 1.0. Several items are intentionally breaking now (bef
 - **`req.locals`** — typed, augmentable per-request app context (declaration merging).
 - **`req.platform`** — typed, augmentable runtime bindings; populated with `{ env, ctx, cf }`
   on Cloudflare, empty elsewhere.
+- **Typed route params from the folder** (`./$types`): `lacis dev`/`lacis build` generate a
+  per-route `$types` so `req.params` is typed from the directory name (`[id]` → `string`,
+  `[id?]` → optional), no schema needed. Resolves via a `rootDirs` tsconfig entry (set by the
+  `create-lacis` scaffold); generated under `.lacis/` (gitignored).
 - **Per-route middleware** `use: [...]` in `defineHandler`, scoped by method. A middleware
   that returns an object has it merged into `req.locals` with the type inferred for the
   handler — typed per-route context with no annotations or declaration merging.

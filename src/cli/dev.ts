@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'fs'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { watchRoutes } from './watch.js'
-import { generateManifest } from './build.js'
+import { generateManifest, generateRouteTypes } from './build.js'
 
 function detectPlatform(cwd: string): 'netlify' | 'vercel' | 'node' | 'cloudflare' {
   if (existsSync(join(cwd, 'wrangler.toml'))) return 'cloudflare'
@@ -27,6 +27,7 @@ export async function dev(routesDir: string): Promise<void> {
   // vercel dev serves /api functions directly; no dev server is needed.
   if (process.env.VERCEL === '1') {
     await generateManifest(routesDir)
+    await generateRouteTypes(routesDir)
     return
   }
 

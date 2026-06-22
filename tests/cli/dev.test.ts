@@ -1,4 +1,5 @@
 const mockGenerateManifest = jest.fn().mockResolvedValue(undefined);
+const mockGenerateRouteTypes = jest.fn().mockResolvedValue(undefined);
 const mockWatchRoutes = jest.fn().mockResolvedValue(undefined);
 const mockExistsSync = jest.fn();
 const mockReadFileSync = jest.fn();
@@ -6,6 +7,7 @@ const mockSpawn = jest.fn();
 
 jest.mock('@/cli/build', () => ({
   generateManifest: (...args: any[]) => mockGenerateManifest(...args),
+  generateRouteTypes: (...args: any[]) => mockGenerateRouteTypes(...args),
 }));
 
 jest.mock('@/cli/watch', () => ({
