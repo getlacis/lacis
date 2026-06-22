@@ -1,8 +1,10 @@
 const mockGenerateManifest = jest.fn().mockResolvedValue(undefined);
+const mockGenerateRouteTypes = jest.fn().mockResolvedValue(undefined);
 const mockWatch = jest.fn();
 
 jest.mock('@/cli/build', () => ({
   generateManifest: (...args: any[]) => mockGenerateManifest(...args),
+  generateRouteTypes: (...args: any[]) => mockGenerateRouteTypes(...args),
 }));
 
 jest.mock('fs', () => ({

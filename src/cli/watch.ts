@@ -1,8 +1,9 @@
 import { watch } from 'fs'
-import { generateManifest } from './build.js'
+import { generateManifest, generateRouteTypes } from './build.js'
 
 export async function watchRoutes(routesDir: string): Promise<void> {
   await generateManifest(routesDir)
+  await generateRouteTypes(routesDir)
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -11,11 +12,12 @@ export async function watchRoutes(routesDir: string): Promise<void> {
 
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(async () => {
-      console.log(`[lacis] Route changed: ${filename}, regenerating manifest...`)
+      console.log(`[lacis] Route changed: ${filename}, regenerating...`)
       try {
         await generateManifest(routesDir)
+        await generateRouteTypes(routesDir)
       } catch (err) {
-        console.error('[lacis] Failed to regenerate manifest:', err)
+        console.error('[lacis] Failed to regenerate:', err)
       }
     }, 100)
   })
