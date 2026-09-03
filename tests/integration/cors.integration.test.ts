@@ -60,12 +60,12 @@ describe('CORS — credentials', () => {
     await close();
   });
 
-  it('reflects origin instead of * when credentials:true + wildcard (browser spec)', async () => {
+  it('refuses credentials with wildcard — keeps * and drops Allow-Credentials', async () => {
     const { request, close } = await createTestApp({ routes, cors: { origin: '*', credentials: true } });
-    await request.get('/api')
+    const res = await request.get('/api')
       .set('Origin', 'https://example.com')
-      .expect('Access-Control-Allow-Origin', 'https://example.com')
-      .expect('Access-Control-Allow-Credentials', 'true');
+      .expect('Access-Control-Allow-Origin', '*');
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
     await close();
   });
 });
