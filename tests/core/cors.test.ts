@@ -137,14 +137,14 @@ describe('createCorsMiddleware', () => {
       expect(headers['access-control-allow-credentials']).toBeUndefined();
     });
 
-    it('credentials:true with wildcard reflects origin instead of * (browsers reject wildcard+credentials)', async () => {
+    it('credentials:true with wildcard is refused — never reflects an arbitrary origin with credentials', async () => {
       const mw = createCorsMiddleware({ origin: '*', credentials: true });
       const req = makeReq('GET', 'https://example.com');
       const { raw, headers } = makeRes();
       await mw(req, raw, undefined);
-      expect(headers['access-control-allow-origin']).toBe('https://example.com');
-      expect(headers['access-control-allow-credentials']).toBe('true');
-      expect(headers['vary']).toBe('Origin');
+      expect(headers['access-control-allow-origin']).toBe('*');
+      expect(headers['access-control-allow-credentials']).toBeUndefined();
+      expect(headers['vary']).toBeUndefined();
     });
   });
 

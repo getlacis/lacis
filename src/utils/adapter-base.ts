@@ -35,7 +35,7 @@ export class RequestCookiesImpl {
       if (idx === -1) continue;
       const k = part.slice(0, idx).trim();
       const v = part.slice(idx + 1).trim();
-      if (k) {
+      if (k && !(k in this._parsed)) { // first-wins, matching proxy/CDN behaviour
         const unquoted = v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v;
         try { this._parsed[k] = decodeURIComponent(unquoted); } catch { this._parsed[k] = unquoted; }
       }
@@ -52,10 +52,22 @@ export class RequestCookiesImpl {
   }
 }
 
+const COOKIE_NAME_RE = /^[!#$%&'*+\-.0-9A-Za-z^_`|~]+$/;
+const COOKIE_ATTR_INVALID_RE = /[\x00-\x1f\x7f;\r\n]/; // CTLs, ";", CR, LF break out of the attribute
+const SAMESITE_VALUES = new Set(['Strict', 'Lax', 'None', 'strict', 'lax', 'none']);
+
 export class ResponseCookiesImpl {
   private _pending: Array<{ name: string; value: string; opts: CookieOptions }> = [];
 
   set(name: string, value: string, options: CookieOptions = {}): this {
+    if (!COOKIE_NAME_RE.test(name))
+      throw new Error(`Invalid cookie name ${JSON.stringify(name)}: only RFC 6265 token characters are allowed`);
+    if (options.path !== undefined && COOKIE_ATTR_INVALID_RE.test(options.path))
+      throw new Error('Invalid cookie Path: control characters, ";", CR and LF are not allowed');
+    if (options.domain !== undefined && COOKIE_ATTR_INVALID_RE.test(options.domain))
+      throw new Error('Invalid cookie Domain: control characters, ";", CR and LF are not allowed');
+    if (options.sameSite !== undefined && !SAMESITE_VALUES.has(String(options.sameSite)))
+      throw new Error(`Invalid SameSite ${JSON.stringify(options.sameSite)}: expected Strict, Lax or None`);
     this._pending.push({ name, value, opts: options });
     return this;
   }

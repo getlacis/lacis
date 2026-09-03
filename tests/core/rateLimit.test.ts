@@ -148,14 +148,14 @@ describe('createRateLimit — key generation', () => {
   });
 
   it('keys by x-forwarded-for — different IPs have independent counters', async () => {
-    const mw = createRateLimit({ max: 1 });
+    const mw = createRateLimit({ max: 1, trustProxy: true });
     await mw(makeReq({ headers: { 'x-forwarded-for': 'IP-A' } }), makeRes());
     await mw(makeReq({ headers: { 'x-forwarded-for': 'IP-A' } }), makeRes()); // A blocked
     expect(await mw(makeReq({ headers: { 'x-forwarded-for': 'IP-B' } }), makeRes())).not.toBe(false);
   });
 
   it('uses only the first IP from a comma-separated x-forwarded-for', async () => {
-    const mw = createRateLimit({ max: 1 });
+    const mw = createRateLimit({ max: 1, trustProxy: true });
     const req = makeReq({ headers: { 'x-forwarded-for': '1.1.1.1 , 2.2.2.2' } });
     await mw(req, makeRes());
     expect(await mw(req, makeRes())).toBe(false); // same first IP
@@ -195,5 +195,40 @@ describe('createRateLimit — store isolation', () => {
     await mw1(req, makeRes()); // mw1 is now blocked
 
     expect(await mw2(req, makeRes())).not.toBe(false); // mw2 store is independent
+  });
+});
+
+describe('createRateLimit — proxy trust (spoofing)', () => {
+  let dateSpy: jest.SpyInstance;
+  beforeEach(() => { dateSpy = jest.spyOn(Date, 'now').mockReturnValue(0); });
+  afterEach(() => { dateSpy.mockRestore(); });
+
+  it('ignores x-forwarded-for by default — a rotated header cannot escape the socket bucket', async () => {
+    const mw = createRateLimit({ max: 1 });
+    await mw(makeReq({ headers: { 'x-forwarded-for': '1.1.1.1' }, remoteAddress: 'sock' }), makeRes());
+    const blocked = await mw(makeReq({ headers: { 'x-forwarded-for': '2.2.2.2' }, remoteAddress: 'sock' }), makeRes());
+    expect(blocked).toBe(false); // same socket, spoofed IP does not help
+  });
+
+  it('keys by x-forwarded-for only when trustProxy is enabled', async () => {
+    const mw = createRateLimit({ max: 1, trustProxy: true });
+    await mw(makeReq({ headers: { 'x-forwarded-for': '1.1.1.1' }, remoteAddress: 'sock' }), makeRes());
+    const other = await mw(makeReq({ headers: { 'x-forwarded-for': '2.2.2.2' }, remoteAddress: 'sock' }), makeRes());
+    expect(other).not.toBe(false); // distinct forwarded IP, distinct bucket
+  });
+});
+
+describe('createRateLimit — concurrency', () => {
+  let dateSpy: jest.SpyInstance;
+  beforeEach(() => { dateSpy = jest.spyOn(Date, 'now').mockReturnValue(0); });
+  afterEach(() => { dateSpy.mockRestore(); });
+
+  it('atomic increment holds the limit under concurrent requests', async () => {
+    const mw = createRateLimit({ max: 5 });
+    const req = makeReq({ remoteAddress: 'burst' });
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => mw(req, makeRes()))
+    );
+    expect(results.filter((r) => r === false)).toHaveLength(5); // exactly requests 6..10 blocked
   });
 });

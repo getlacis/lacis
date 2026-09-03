@@ -1,6 +1,7 @@
 import type { CorsConfig, Request, Response } from '@/types';
 import type { MiddlewareCallback } from '@/types/middleware';
 import { addMiddleware } from './middleware';
+import { primaryLog } from '@/utils/logs';
 
 function isOriginAllowed(origin: string, allowed: CorsConfig['origin']): boolean {
   if (!allowed || allowed === '*') return true;
@@ -18,17 +19,34 @@ function createCorsMiddleware(config: CorsConfig): MiddlewareCallback {
   const maxAge = config.maxAge != null ? String(config.maxAge) : null;
   const isWildcard = !config.origin || config.origin === '*';
 
+  // `*` + credentials is forbidden by the spec: reflecting an arbitrary origin
+  // with Allow-Credentials would let any site make credentialed requests. Refuse
+  // the combination rather than reflect every origin.
+  const allowCredentials = !!config.credentials && !isWildcard;
+  if (config.credentials && isWildcard) {
+    primaryLog('[cors] credentials:true with origin:"*" is unsafe and disabled — set an explicit origin allowlist to use credentials');
+  }
+
+  if (config.origin instanceof RegExp) {
+    const src = config.origin.source;
+    if (!src.startsWith('^') || !src.endsWith('$')) {
+      primaryLog(`[cors] origin RegExp /${src}/ is not anchored (^…$) and may match unintended hosts`);
+    }
+  }
+
   return async (req: Request, res: Response) => {
     const origin = req.getHeader('origin');
 
     if (!origin) return;
     if (!isOriginAllowed(origin, config.origin)) return;
 
-    // credentials:true is incompatible with wildcard, reflect the actual origin instead
-    const useWildcard = isWildcard && !config.credentials;
-    res.setHeader('Access-Control-Allow-Origin', useWildcard ? '*' : origin);
-    if (!useWildcard) res.setHeader('Vary', 'Origin');
-    if (config.credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
+    if (isWildcard) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    }
+    if (allowCredentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
     if (exposedHeaders) res.setHeader('Access-Control-Expose-Headers', exposedHeaders);
 
     if (req.method === 'OPTIONS') {

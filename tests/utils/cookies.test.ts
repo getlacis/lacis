@@ -45,6 +45,11 @@ describe('RequestCookiesImpl', () => {
     const second = c.all();
     expect(first).toEqual(second);
   });
+
+  it('keeps the first value on duplicate names (matches proxy/CDN behaviour)', () => {
+    const c = new RequestCookiesImpl('sid=legit; sid=attacker');
+    expect(c.get('sid')).toBe('legit');
+  });
 });
 
 describe('ResponseCookiesImpl', () => {
@@ -114,6 +119,23 @@ describe('ResponseCookiesImpl', () => {
       const c = new ResponseCookiesImpl();
       c.set('a', '1').set('b', '2');
       expect(c.serialize()).toHaveLength(2);
+    });
+
+    it('rejects a name carrying attribute/CRLF injection', () => {
+      const c = new ResponseCookiesImpl();
+      expect(() => c.set('a; Path=/; HttpOnly', 'v')).toThrow(/Invalid cookie name/);
+      expect(() => c.set('a\r\nSet-Cookie: evil=1', 'v')).toThrow(/Invalid cookie name/);
+    });
+
+    it('rejects Path/Domain values that break out of the attribute', () => {
+      const c = new ResponseCookiesImpl();
+      expect(() => c.set('sid', 'v', { path: '/; Domain=attacker.com' })).toThrow(/Invalid cookie Path/);
+      expect(() => c.set('sid', 'v', { domain: 'x\r\nSet-Cookie: evil=1' })).toThrow(/Invalid cookie Domain/);
+    });
+
+    it('rejects an unknown SameSite value', () => {
+      const c = new ResponseCookiesImpl();
+      expect(() => c.set('sid', 'v', { sameSite: 'Bogus' as any })).toThrow(/Invalid SameSite/);
     });
   });
 
